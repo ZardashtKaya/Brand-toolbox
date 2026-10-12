@@ -158,7 +158,6 @@ public struct LeftDockView: View {
                     lineWidth: 1
                 )
         )
-        .shadow(color: Color.black.opacity(0.5), radius: 24, x: 8, y: 12)
         .sheet(isPresented: $showingAddBrandSheet) {
             AddBrandSheet(store: store)
         }

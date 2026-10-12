@@ -107,7 +107,6 @@ public struct DynamicIslandView: View {
                 ClosedPillShape(cornerRadius: 18)
                     .stroke(Color.white.opacity(0.15), lineWidth: 0.8)
             )
-            .shadow(color: Color.black.opacity(0.4), radius: 10, x: 0, y: 4)
         }
         .buttonStyle(.plain)
     }
@@ -328,7 +327,6 @@ public struct DynamicIslandView: View {
                     lineWidth: 1
                 )
         )
-        .shadow(color: Color.black.opacity(0.55), radius: 24, x: 0, y: 12)
     }
 
     // MARK: - Actions

@@ -14,7 +14,9 @@ public struct DynamicIslandMiniView: View {
     @State private var showingBrandMenu: Bool = false
     @State private var copiedColorId: UUID? = nil
     @State private var copiedLogoId: UUID? = nil
+    @State private var copiedFontId: UUID? = nil
     @State private var isDropTargeted: Bool = false
+    @State private var isLogoDropTargeted: Bool = false
 
     public init(
         store: BrandStore = .shared,
@@ -82,7 +84,6 @@ public struct DynamicIslandMiniView: View {
                 ClosedPillShape(cornerRadius: 18)
                     .stroke(Color.white.opacity(0.18), lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(0.55), radius: 12, x: 0, y: 4)
         }
         .buttonStyle(.plain)
         .help("Click to expand Brand Island")
@@ -100,8 +101,10 @@ public struct DynamicIslandMiniView: View {
                         ForEach(store.brands) { brand in
                             let isSel = store.selectedBrandId == brand.id
                             Button(action: {
-                                store.selectedBrandId = brand.id
-                                store.savePreferences()
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
+                                    store.selectedBrandId = brand.id
+                                    store.savePreferences()
+                                }
                             }) {
                                 HStack(spacing: 5) {
                                     Circle()
@@ -119,6 +122,27 @@ public struct DynamicIslandMiniView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .help("\(brand.name) (Click to select, Right-click to manage)")
+                            .contextMenu {
+                                Button("Add Color...") {
+                                    store.selectedBrandId = brand.id
+                                    OverlayPanelController.shared.openAddColorWindow()
+                                }
+                                Button("Add Logo...") {
+                                    store.selectedBrandId = brand.id
+                                    pickAndAddLogo(for: brand)
+                                }
+                                Button("Add Font...") {
+                                    store.selectedBrandId = brand.id
+                                    OverlayPanelController.shared.openAddFontWindow()
+                                }
+                                if store.brands.count > 1 {
+                                    Divider()
+                                    Button("Delete Brand '\(brand.name)'", role: .destructive) {
+                                        store.deleteBrand(brand)
+                                    }
+                                }
+                            }
                         }
 
                         Button(action: {
@@ -131,6 +155,7 @@ public struct DynamicIslandMiniView: View {
                                 .background(Circle().fill(Color.white.opacity(0.06)))
                         }
                         .buttonStyle(.plain)
+                        .help("Add New Brand")
                     }
                 }
 
@@ -167,6 +192,7 @@ public struct DynamicIslandMiniView: View {
                         .background(Circle().fill(Color.white.opacity(0.08)))
                 }
                 .buttonStyle(.plain)
+                .help("Preferences")
 
                 // Collapse Button
                 Button(action: onToggleExpand) {
@@ -202,6 +228,7 @@ public struct DynamicIslandMiniView: View {
                                     .foregroundColor(brand.accentColor)
                             }
                             .buttonStyle(.plain)
+                            .help("Add Color")
                         }
 
                         ScrollView(.vertical, showsIndicators: false) {
@@ -243,6 +270,49 @@ public struct DynamicIslandMiniView: View {
                                         .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.04)))
                                     }
                                     .buttonStyle(.plain)
+                                    .help("\(color.name): \(color.formattedHex) (Click to copy, Right-click for options)")
+                                    .contextMenu {
+                                        Button("Copy \(color.formattedHex)") {
+                                            store.copyColor(color)
+                                        }
+                                        Button("Copy RGB (\(color.formatted(for: .rgb)))") {
+                                            store.copyColor(color, format: .rgb)
+                                        }
+                                        Button("Copy SwiftUI Color") {
+                                            store.copyColor(color, format: .swiftUI)
+                                        }
+                                        Button("Copy CSS (\(color.formatted(for: .cssVar)))") {
+                                            store.copyColor(color, format: .cssVar)
+                                        }
+                                        Divider()
+                                        Button("Add Color...") {
+                                            OverlayPanelController.shared.openAddColorWindow()
+                                        }
+                                        Button("Delete Color", role: .destructive) {
+                                            store.deleteColor(from: brand, colorId: color.id)
+                                        }
+                                    }
+                                }
+
+                                if brand.colors.isEmpty {
+                                    Button(action: {
+                                        OverlayPanelController.shared.openAddColorWindow()
+                                    }) {
+                                        HStack {
+                                            Image(systemName: "plus.circle")
+                                            Text("Add Color")
+                                        }
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.4))
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 10)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                                                .foregroundColor(Color.white.opacity(0.15))
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                             }
                         }
@@ -268,6 +338,7 @@ public struct DynamicIslandMiniView: View {
                                     .foregroundColor(brand.accentColor)
                             }
                             .buttonStyle(.plain)
+                            .help("Add Logo")
                         }
 
                         ScrollView(.vertical, showsIndicators: false) {
@@ -292,7 +363,7 @@ public struct DynamicIslandMiniView: View {
                                                     .aspectRatio(contentMode: .fit)
                                                     .padding(6)
                                             } else {
-                                                Text("LOGO")
+                                                Text(logo.name.prefix(4).uppercased())
                                                     .font(.system(size: 9, weight: .bold))
                                                     .foregroundColor(isDark ? .white : .black)
                                             }
@@ -307,16 +378,74 @@ public struct DynamicIslandMiniView: View {
                                         }
                                     }
                                     .buttonStyle(.plain)
+                                    .help("\(logo.name) (Click to copy, Drag to use, Right-click for options)")
                                     .onDrag {
-                                        let p = NSItemProvider()
-                                        if let f = store.fileURLForLogo(logo) {
-                                            p.registerObject(f as NSURL, visibility: .all)
-                                        }
-                                        if let img = store.imageForLogo(logo) {
-                                            p.registerObject(img, visibility: .all)
-                                        }
-                                        return p
+                                        createDragProvider(for: logo)
                                     }
+                                    .contextMenu {
+                                        Button("Copy Image") {
+                                            store.copyLogoImage(logo)
+                                        }
+                                        if let fileURL = store.fileURLForLogo(logo) {
+                                            Button("Reveal in Finder") {
+                                                NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+                                            }
+                                        }
+                                        Divider()
+                                        Button("Delete Logo", role: .destructive) {
+                                            store.deleteLogo(from: brand, logoId: logo.id)
+                                        }
+                                    }
+                                }
+                                dropAndAddTile(brand: brand)
+                            }
+
+                            Divider()
+                                .background(Color.white.opacity(0.12))
+                                .padding(.vertical, 4)
+
+                            // FONTS Section
+                            HStack {
+                                Text("FONTS")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(.white.opacity(0.45))
+                                    .tracking(0.6)
+                                Spacer()
+                                Button(action: {
+                                    OverlayPanelController.shared.openAddFontWindow()
+                                }) {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundColor(brand.accentColor)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Add Font")
+                            }
+
+                            VStack(spacing: 5) {
+                                ForEach(brand.fonts) { font in
+                                    fontRow(font: font, brand: brand)
+                                }
+
+                                if brand.fonts.isEmpty {
+                                    Button(action: {
+                                        OverlayPanelController.shared.openAddFontWindow()
+                                    }) {
+                                        HStack {
+                                            Image(systemName: "textformat")
+                                            Text("Add Font")
+                                        }
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.4))
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 8)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                                                .foregroundColor(Color.white.opacity(0.15))
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                             }
                         }
@@ -332,12 +461,28 @@ public struct DynamicIslandMiniView: View {
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1.2)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(isDropTargeted ? 0.45 : 0.2),
+                            Color.white.opacity(0.08)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: isDropTargeted ? 1.8 : 1.2
+                )
         )
-        .shadow(color: Color.black.opacity(0.65), radius: 20, x: 0, y: 8)
+        .onDrop(of: [.fileURL, .image, .png, .jpeg, .tiff], isTargeted: $isDropTargeted) { providers in
+            if let brand = store.selectedBrand {
+                return store.handleDroppedProviders(providers, for: brand)
+            }
+            return false
+        }
     }
 
     private func pickAndAddLogo(for brand: Brand) {
+        OverlayPanelController.shared.isInteracting = true
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
@@ -348,6 +493,128 @@ public struct DynamicIslandMiniView: View {
             for url in panel.urls {
                 store.addLogoFile(to: brand, fileURL: url)
             }
+        }
+        OverlayPanelController.shared.isInteracting = false
+    }
+
+    private func createDragProvider(for logo: BrandLogo) -> NSItemProvider {
+        let provider = NSItemProvider()
+        if let fileURL = store.fileURLForLogo(logo) {
+            provider.registerFileRepresentation(
+                forTypeIdentifier: UTType.image.identifier,
+                fileOptions: [],
+                visibility: .all
+            ) { completion in
+                completion(fileURL, false, nil)
+                return nil
+            }
+            provider.registerObject(fileURL as NSURL, visibility: .all)
+            if let img = store.imageForLogo(logo) {
+                provider.registerObject(img, visibility: .all)
+            }
+        } else if let img = store.imageForLogo(logo) {
+            provider.registerObject(img, visibility: .all)
+        }
+        return provider
+    }
+
+    private func fontRow(font: BrandFont, brand: Brand) -> some View {
+        let isCopied = copiedFontId == font.id
+
+        return Button(action: {
+            store.copyFontName(font)
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
+                copiedFontId = font.id
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    if copiedFontId == font.id {
+                        copiedFontId = nil
+                    }
+                }
+            }
+        }) {
+            HStack(spacing: 7) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(Color.white.opacity(0.08))
+                        .frame(width: 22, height: 18)
+                    Text("Aa")
+                        .font(.system(size: 9, weight: .bold, design: .serif))
+                        .foregroundColor(.white.opacity(0.75))
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(font.name)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    if !font.role.isEmpty {
+                        Text(font.role)
+                            .font(.system(size: 8, weight: .regular))
+                            .foregroundColor(.white.opacity(0.4))
+                    }
+                }
+
+                Spacer(minLength: 4)
+
+                if isCopied {
+                    Text("COPIED")
+                        .font(.system(size: 8, weight: .heavy))
+                        .foregroundColor(.green)
+                } else {
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 8))
+                        .foregroundColor(.white.opacity(0.3))
+                }
+            }
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4.5)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.04)))
+        }
+        .buttonStyle(.plain)
+        .help("\(font.name) (\(font.role)) - Click to copy font name")
+        .contextMenu {
+            Button("Copy Font Name") {
+                store.copyFontName(font)
+            }
+            Divider()
+            Button("Delete Font", role: .destructive) {
+                store.deleteFont(from: brand, fontId: font.id)
+            }
+        }
+    }
+
+    private func dropAndAddTile(brand: Brand) -> some View {
+        Button(action: {
+            pickAndAddLogo(for: brand)
+        }) {
+            VStack(spacing: 3) {
+                Image(systemName: isLogoDropTargeted ? "arrow.down.circle.fill" : "plus.circle")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(isLogoDropTargeted ? brand.accentColor : .white.opacity(0.55))
+                Text(isLogoDropTargeted ? "Drop Here" : "Drop / Add")
+                    .font(.system(size: 8.5, weight: .medium))
+                    .foregroundColor(isLogoDropTargeted ? brand.accentColor : .white.opacity(0.55))
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isLogoDropTargeted ? brand.accentColor.opacity(0.22) : Color.white.opacity(0.04))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(
+                        style: StrokeStyle(lineWidth: isLogoDropTargeted ? 1.6 : 1, dash: [4, 3])
+                    )
+                    .foregroundColor(isLogoDropTargeted ? brand.accentColor : Color.white.opacity(0.2))
+            )
+        }
+        .buttonStyle(.plain)
+        .help("Drag & drop an image or click to choose file")
+        .onDrop(of: [.fileURL, .image, .png, .jpeg, .tiff], isTargeted: $isLogoDropTargeted) { providers in
+            store.handleDroppedProviders(providers, for: brand)
         }
     }
 }

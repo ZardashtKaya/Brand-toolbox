@@ -31,6 +31,7 @@ public struct BrandToolboxMainView: View {
             case .leftDock, .rightDock:
                 MiniDockView(
                     store: store,
+                    onToggleExpand: onToggleExpand,
                     onTogglePin: onTogglePin,
                     onSwitchMode: onSwitchMode,
                     onOpenSettings: onOpenSettings

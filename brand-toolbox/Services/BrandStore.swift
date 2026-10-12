@@ -22,7 +22,7 @@ public final class BrandStore: ObservableObject {
     private var toastTimer: Task<Void, Never>?
 
     private let fileManager = FileManager.default
-    private var appSupportURL: URL {
+    private var appSupportURL: URL {now
         let paths = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)
         let dir = paths[0].appendingPathComponent("BrandToolbox", isDirectory: true)
         if !fileManager.fileExists(atPath: dir.path) {
@@ -93,17 +93,20 @@ public final class BrandStore: ObservableObject {
     }
 
     public func idealDockHeight(maxAllowed: CGFloat = 560) -> CGFloat {
-        guard let brand = selectedBrand else { return 260 }
+        guard let brand = selectedBrand else { return 280 }
         let colorsCount = max(1, brand.colors.count)
-        let logosCount = max(1, brand.logos.count)
+        let logosCount = max(1, brand.logos.count + 1)
+        let fontsCount = brand.fonts.count
 
-        let colorsHeight = CGFloat(colorsCount) * (26 + 8)
-        let logosHeight = CGFloat(logosCount) * (58 + 8)
-        let chromeHeight: CGFloat = 28 + 36 // padding top/bottom + chevron
-        let total = chromeHeight + colorsHeight + logosHeight
+        let colorsHeight = CGFloat(colorsCount) * 32
+        let logoRows = ceil(Double(logosCount) / 2.0)
+        let logosHeight = CGFloat(max(1, logoRows)) * 56
+        let fontsHeight = fontsCount > 0 ? (CGFloat(fontsCount) * 30 + 26) : 0
+        let chromeHeight: CGFloat = 142 // Header + Brand chips + Section headers + Dividers + Padding
+        let total = chromeHeight + colorsHeight + logosHeight + fontsHeight
 
-        let minHeight: CGFloat = 220
-        let maxHeight = min(maxAllowed, 540)
+        let minHeight: CGFloat = 260
+        let maxHeight = min(maxAllowed, 560)
         return min(maxHeight, max(minHeight, total))
     }
 
@@ -127,12 +130,20 @@ public final class BrandStore: ObservableObject {
         if fileManager.fileExists(atPath: brandsFileURL.path) {
             do {
                 let data = try Data(contentsOf: brandsFileURL)
-                let loaded = try JSONDecoder().decode([Brand].self, from: data)
+                var loaded = try JSONDecoder().decode([Brand].self, from: data)
                 if !loaded.isEmpty {
+                    // Seed fonts for preset brands if they don't have any fonts yet
+                    let presets = defaultPresetBrands()
+                    for i in 0..<loaded.count {
+                        if loaded[i].fonts.isEmpty, let match = presets.first(where: { $0.name == loaded[i].name }) {
+                            loaded[i].fonts = match.fonts
+                        }
+                    }
                     self.brands = loaded
                     if selectedBrandId == nil || !loaded.contains(where: { $0.id == selectedBrandId }) {
                         self.selectedBrandId = loaded.first?.id
                     }
+                    saveBrands()
                     generateMissingPresetImages()
                     return
                 }
@@ -428,6 +439,101 @@ public final class BrandStore: ObservableObject {
         }
     }
 
+    public func addLogoImage(to brand: Brand, image: NSImage, name: String? = nil) {
+        guard let bIdx = brands.firstIndex(where: { $0.id == brand.id }) else { return }
+
+        let id = UUID()
+        let destFileName = "\(id.uuidString).png"
+        let destURL = assetsDirectoryURL.appendingPathComponent(destFileName)
+
+        guard let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            return
+        }
+
+        do {
+            try pngData.write(to: destURL)
+            let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let logoName = !trimmed.isEmpty ? trimmed : "\(brand.name) Logo \(brands[bIdx].logos.count + 1)"
+            let newLogo = BrandLogo(
+                id: id,
+                name: logoName,
+                type: .file,
+                fileName: destFileName,
+                isDarkVariant: false
+            )
+            brands[bIdx].logos.append(newLogo)
+            saveBrands()
+            showToast(message: "Imported logo '\(logoName)'")
+            if soundAndHaptics {
+                NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+                NSSound(named: "Pop")?.play()
+            }
+        } catch {
+            print("Failed to save dropped image: \(error)")
+        }
+    }
+
+    // MARK: - Universal Drag & Drop Intake
+    @discardableResult
+    public func handleDroppedProviders(_ providers: [NSItemProvider], for brand: Brand) -> Bool {
+        guard !providers.isEmpty else { return false }
+        var handled = false
+
+        for provider in providers {
+            // 1. Finder / local file URLs
+            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                    var fileURL: URL? = nil
+                    if let url = item as? URL {
+                        fileURL = url
+                    } else if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
+                        fileURL = url
+                    }
+                    if let fileURL = fileURL {
+                        Task { @MainActor in
+                            self.addLogoFile(to: brand, fileURL: fileURL)
+                        }
+                    }
+                }
+                handled = true
+                continue
+            }
+
+            // 2. Direct NSImage instances (from Figma, Photos, Arc/Safari)
+            if provider.canLoadObject(ofClass: NSImage.self) {
+                provider.loadObject(ofClass: NSImage.self) { object, _ in
+                    if let image = object as? NSImage {
+                        Task { @MainActor in
+                            self.addLogoImage(to: brand, image: image, name: provider.suggestedName)
+                        }
+                    }
+                }
+                handled = true
+                continue
+            }
+
+            // 3. Image data representations (PNG, JPEG, TIFF, general image)
+            let imageTypes: [UTType] = [.png, .jpeg, .tiff, .image]
+            for type in imageTypes {
+                if provider.hasItemConformingToTypeIdentifier(type.identifier) {
+                    provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { data, _ in
+                        if let data = data, let image = NSImage(data: data) {
+                            Task { @MainActor in
+                                self.addLogoImage(to: brand, image: image, name: provider.suggestedName)
+                            }
+                        }
+                    }
+                    handled = true
+                    break
+                }
+            }
+        }
+
+        return handled
+    }
+
     public func addSymbolLogo(to brand: Brand, name: String, symbol: String, accentHex: String?) {
         guard let bIdx = brands.firstIndex(where: { $0.id == brand.id }) else { return }
         let id = UUID()
@@ -466,6 +572,32 @@ public final class BrandStore: ObservableObject {
         saveBrands()
     }
 
+    // MARK: - Fonts Management
+
+    public func addFont(to brand: Brand, name: String, role: String = "Primary") {
+        guard let bIdx = brands.firstIndex(where: { $0.id == brand.id }) else { return }
+        let font = BrandFont(name: name, role: role)
+        brands[bIdx].fonts.append(font)
+        saveBrands()
+        showToast(message: "Added font '\(name)'")
+    }
+
+    public func deleteFont(from brand: Brand, fontId: UUID) {
+        guard let bIdx = brands.firstIndex(where: { $0.id == brand.id }) else { return }
+        brands[bIdx].fonts.removeAll(where: { $0.id == fontId })
+        saveBrands()
+    }
+
+    public func copyFontName(_ font: BrandFont) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(font.name, forType: .string)
+        showToast(message: "Copied font '\(font.name)'")
+        if soundAndHaptics {
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+            NSSound(named: "Tink")?.play()
+        }
+    }
+
     // MARK: - Default Presets
 
     private func defaultPresetBrands() -> [Brand] {
@@ -490,6 +622,12 @@ public final class BrandStore: ObservableObject {
                     BrandLogo(name: "App Store", type: .systemSymbol, systemSymbol: "bag.fill", accentColorHex: "#0071E3"),
                     BrandLogo(name: "Finder Face", type: .systemSymbol, systemSymbol: "macwindow", accentColorHex: "#0071E3")
                 ],
+                fonts: [
+                    BrandFont(name: "SF Pro", role: "Primary"),
+                    BrandFont(name: "SF Pro Rounded", role: "Headings"),
+                    BrandFont(name: "SF Mono", role: "Code"),
+                    BrandFont(name: "New York", role: "Serif")
+                ],
                 isFavorite: true
             ),
             Brand(
@@ -510,6 +648,10 @@ public final class BrandStore: ObservableObject {
                     BrandLogo(name: "Agent Terminal", type: .systemSymbol, systemSymbol: "terminal.fill", accentColorHex: "#00E599"),
                     BrandLogo(name: "Wave Pulse", type: .systemSymbol, systemSymbol: "waveform.path.ecg", accentColorHex: "#3B82F6")
                 ],
+                fonts: [
+                    BrandFont(name: "Geist", role: "Primary"),
+                    BrandFont(name: "JetBrains Mono", role: "Code")
+                ],
                 isFavorite: true
             ),
             Brand(
@@ -528,6 +670,11 @@ public final class BrandStore: ObservableObject {
                     BrandLogo(name: "Stripe S", type: .systemSymbol, systemSymbol: "dollarsign.circle.fill", accentColorHex: "#635BFF"),
                     BrandLogo(name: "Terminal Card", type: .systemSymbol, systemSymbol: "creditcard.fill", accentColorHex: "#00D4B2"),
                     BrandLogo(name: "API Code", type: .systemSymbol, systemSymbol: "chevron.left.forwardslash.chevron.right", accentColorHex: "#6392F9")
+                ],
+                fonts: [
+                    BrandFont(name: "Söhne", role: "Primary"),
+                    BrandFont(name: "Söhne Breit", role: "Headings"),
+                    BrandFont(name: "Söhne Mono", role: "Code")
                 ],
                 isFavorite: true
             ),
@@ -548,6 +695,10 @@ public final class BrandStore: ObservableObject {
                     BrandLogo(name: "Components", type: .systemSymbol, systemSymbol: "square.grid.2x2.fill", accentColorHex: "#0ACF83"),
                     BrandLogo(name: "Bezier Path", type: .systemSymbol, systemSymbol: "beziercurve", accentColorHex: "#1ABCFE")
                 ],
+                fonts: [
+                    BrandFont(name: "Inter", role: "Primary"),
+                    BrandFont(name: "Whyte Inktrap", role: "Display")
+                ],
                 isFavorite: false
             ),
             Brand(
@@ -564,6 +715,10 @@ public final class BrandStore: ObservableObject {
                 logos: [
                     BrandLogo(name: "Linear Cycle", type: .systemSymbol, systemSymbol: "arrow.triangle.2.circlepath", accentColorHex: "#5E6AD2"),
                     BrandLogo(name: "Issue Scope", type: .systemSymbol, systemSymbol: "target", accentColorHex: "#FFFFFF")
+                ],
+                fonts: [
+                    BrandFont(name: "Inter", role: "Primary"),
+                    BrandFont(name: "Fragment Mono", role: "Code")
                 ],
                 isFavorite: false
             )

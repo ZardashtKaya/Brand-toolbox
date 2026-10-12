@@ -35,6 +35,7 @@ public final class OverlayPanelController: ObservableObject {
     private var settingsWindowController: NSWindowController?
     private var addBrandWindowController: NSWindowController?
     private var addColorWindowController: NSWindowController?
+    private var addFontWindowController: NSWindowController?
     private var cancellables = Set<AnyCancellable>()
 
     public init() {
@@ -51,6 +52,12 @@ public final class OverlayPanelController: ObservableObject {
             }
             .store(in: &cancellables)
 
+        store.$brands
+            .sink { [weak self] _ in
+                self?.repositionPanel(animated: true)
+            }
+            .store(in: &cancellables)
+
         store.$isPinned
             .sink { [weak self] pinned in
                 if pinned {
@@ -58,6 +65,26 @@ public final class OverlayPanelController: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        // Keep panel open and active during any context menu interaction
+        NotificationCenter.default.addObserver(
+            forName: NSMenu.didBeginTrackingNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.isInteracting = true
+            self?.autoCollapseWorkItem?.cancel()
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: NSMenu.didEndTrackingNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                self?.isInteracting = false
+            }
+        }
     }
 
     // MARK: - Setup & Presentation
@@ -162,6 +189,14 @@ public final class OverlayPanelController: ObservableObject {
         window.level = .floating
         window.center()
 
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            self?.isInteracting = false
+        }
+
         let wc = NSWindowController(window: window)
         self.settingsWindowController = wc
         wc.showWindow(nil)
@@ -171,24 +206,41 @@ public final class OverlayPanelController: ObservableObject {
     public func openAddBrandWindow() {
         isInteracting = true
         if let existing = addBrandWindowController {
-            existing.showWindow(nil)
-            existing.window?.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
+            existing.close()
+            self.addBrandWindowController = nil
         }
 
-        let sheetView = AddBrandSheet(store: store)
+        var windowRef: NSWindow?
+        let closeHandler: () -> Void = { [weak self] in
+            windowRef?.close()
+            self?.addBrandWindowController = nil
+            self?.isInteracting = false
+        }
+
+        let sheetView = AddBrandSheet(store: store, onClose: closeHandler)
         let hostingController = NSHostingController(rootView: sheetView)
         let window = NSWindow(contentViewController: hostingController)
+        windowRef = window
         window.title = "Create New Brand"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
+        window.backgroundColor = .white
         window.level = .floating
         window.center()
+
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            self?.addBrandWindowController = nil
+            self?.isInteracting = false
+        }
 
         let wc = NSWindowController(window: window)
         self.addBrandWindowController = wc
         wc.showWindow(nil)
+        window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -196,24 +248,83 @@ public final class OverlayPanelController: ObservableObject {
         guard let brand = store.selectedBrand else { return }
         isInteracting = true
         if let existing = addColorWindowController {
-            existing.showWindow(nil)
-            existing.window?.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
+            existing.close()
+            self.addColorWindowController = nil
         }
 
-        let sheetView = AddColorSheet(store: store, brand: brand)
+        var windowRef: NSWindow?
+        let closeHandler: () -> Void = { [weak self] in
+            windowRef?.close()
+            self?.addColorWindowController = nil
+            self?.isInteracting = false
+        }
+
+        let sheetView = AddColorSheet(store: store, brand: brand, onClose: closeHandler)
         let hostingController = NSHostingController(rootView: sheetView)
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "Add Color to \(brand.name)"
+        windowRef = window
+        window.title = "Add Color • \(brand.name)"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
+        window.backgroundColor = .white
         window.level = .floating
         window.center()
+
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            self?.addColorWindowController = nil
+            self?.isInteracting = false
+        }
 
         let wc = NSWindowController(window: window)
         self.addColorWindowController = wc
         wc.showWindow(nil)
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    public func openAddFontWindow() {
+        guard let brand = store.selectedBrand else { return }
+        isInteracting = true
+        if let existing = addFontWindowController {
+            existing.close()
+            self.addFontWindowController = nil
+        }
+
+        var windowRef: NSWindow?
+        let closeHandler: () -> Void = { [weak self] in
+            windowRef?.close()
+            self?.addFontWindowController = nil
+            self?.isInteracting = false
+        }
+
+        let sheetView = AddFontSheet(store: store, brand: brand, onClose: closeHandler)
+        let hostingController = NSHostingController(rootView: sheetView)
+        let window = NSWindow(contentViewController: hostingController)
+        windowRef = window
+        window.title = "Add Font • \(brand.name)"
+        window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
+        window.backgroundColor = .white
+        window.level = .floating
+        window.center()
+
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            self?.addFontWindowController = nil
+            self?.isInteracting = false
+        }
+
+        let wc = NSWindowController(window: window)
+        self.addFontWindowController = wc
+        wc.showWindow(nil)
+        window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -253,14 +364,14 @@ public final class OverlayPanelController: ObservableObject {
 
         switch store.overlayMode {
         case .leftDock:
-            let width: CGFloat = 76
+            let width: CGFloat = 196
             let height = store.idealDockHeight(maxAllowed: sFrame.height - 120)
             let y: CGFloat = sFrame.minY + (sFrame.height - height) / 2
             let x: CGFloat = isExpanded ? (sFrame.minX + 14) : (sFrame.minX - width + 6)
             return NSRect(x: x, y: y, width: width, height: height)
 
         case .rightDock:
-            let width: CGFloat = 76
+            let width: CGFloat = 196
             let height = store.idealDockHeight(maxAllowed: sFrame.height - 120)
             let y: CGFloat = sFrame.minY + (sFrame.height - height) / 2
             let x: CGFloat = isExpanded ? (sFrame.maxX - width - 14) : (sFrame.maxX - 6)
@@ -365,7 +476,7 @@ public final class OverlayPanelController: ObservableObject {
                 let dockHitArea = NSRect(
                     x: screen.frame.minX - 10,
                     y: panelFrame.minY - 30,
-                    width: 76 + 240,
+                    width: panelFrame.width + 40,
                     height: panelFrame.height + 60
                 )
                 if NSMouseInRect(location, dockHitArea, false) {
@@ -386,9 +497,9 @@ public final class OverlayPanelController: ObservableObject {
                 }
             } else if isExpanded {
                 let dockHitArea = NSRect(
-                    x: panelFrame.minX - 240,
+                    x: panelFrame.minX - 30,
                     y: panelFrame.minY - 30,
-                    width: 76 + 250,
+                    width: panelFrame.width + 40,
                     height: panelFrame.height + 60
                 )
                 if NSMouseInRect(location, dockHitArea, false) {

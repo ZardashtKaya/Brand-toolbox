@@ -193,6 +193,20 @@ public struct BrandLogo: Identifiable, Codable, Hashable {
     }
 }
 
+// MARK: - Brand Font
+
+public struct BrandFont: Identifiable, Codable, Hashable {
+    public var id: UUID
+    public var name: String
+    public var role: String
+
+    public init(id: UUID = UUID(), name: String, role: String = "Primary") {
+        self.id = id
+        self.name = name
+        self.role = role
+    }
+}
+
 // MARK: - Brand Model
 
 public struct Brand: Identifiable, Codable, Hashable {
@@ -203,6 +217,7 @@ public struct Brand: Identifiable, Codable, Hashable {
     public var accentColorHex: String
     public var colors: [BrandColor]
     public var logos: [BrandLogo]
+    public var fonts: [BrandFont]
     public var isFavorite: Bool
     public var createdAt: Date
 
@@ -214,6 +229,7 @@ public struct Brand: Identifiable, Codable, Hashable {
         accentColorHex: String = "#0071E3",
         colors: [BrandColor] = [],
         logos: [BrandLogo] = [],
+        fonts: [BrandFont] = [],
         isFavorite: Bool = false,
         createdAt: Date = Date()
     ) {
@@ -224,8 +240,27 @@ public struct Brand: Identifiable, Codable, Hashable {
         self.accentColorHex = accentColorHex
         self.colors = colors
         self.logos = logos
+        self.fonts = fonts
         self.isFavorite = isFavorite
         self.createdAt = createdAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, tagline, iconSymbol, accentColorHex, colors, logos, fonts, isFavorite, createdAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        tagline = try container.decodeIfPresent(String.self, forKey: .tagline) ?? ""
+        iconSymbol = try container.decodeIfPresent(String.self, forKey: .iconSymbol) ?? "paintpalette.fill"
+        accentColorHex = try container.decodeIfPresent(String.self, forKey: .accentColorHex) ?? "#0071E3"
+        colors = try container.decodeIfPresent([BrandColor].self, forKey: .colors) ?? []
+        logos = try container.decodeIfPresent([BrandLogo].self, forKey: .logos) ?? []
+        fonts = try container.decodeIfPresent([BrandFont].self, forKey: .fonts) ?? []
+        isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
     }
 
     public var accentColor: Color {
