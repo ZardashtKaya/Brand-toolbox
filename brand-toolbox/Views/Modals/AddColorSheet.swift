@@ -10,6 +10,7 @@ public struct AddColorSheet: View {
     @State private var hexInput: String = "#0071E3"
     @State private var selectedColor: Color = Color(hex: "#0071E3")
     @State private var selectedRole: ColorRole = .accent
+    @State private var isProgrammaticUpdate: Bool = false
 
     private let presetHexes = [
         "#0071E3", "#000000", "#FFFFFF", "#FF5E5B",
@@ -21,6 +22,30 @@ public struct AddColorSheet: View {
         self.store = store
         self.brand = brand
         self.onClose = onClose
+    }
+
+    private var contrastTextColor: Color {
+        let nsColor = NSColor(selectedColor)
+        guard let rgb = nsColor.usingColorSpace(.sRGB) else { return .white }
+        let luminance = 0.299 * rgb.redComponent + 0.587 * rgb.greenComponent + 0.114 * rgb.blueComponent
+        return luminance < 0.55 ? .white : .black
+    }
+
+    private func cleanHex(_ string: String) -> String {
+        var clean = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.hasPrefix("#") {
+            clean.removeFirst()
+        }
+        return clean
+    }
+
+    private func isCompleteValidHex(_ string: String) -> Bool {
+        let clean = cleanHex(string)
+        guard clean.count == 3 || clean.count == 6 || clean.count == 8 else {
+            return false
+        }
+        let hexDigits = CharacterSet(charactersIn: "0123456789ABCDEFabcdef")
+        return clean.unicodeScalars.allSatisfy { hexDigits.contains($0) }
     }
 
     public var body: some View {
@@ -61,11 +86,11 @@ public struct AddColorSheet: View {
                 VStack(spacing: 3) {
                     Text(name.isEmpty ? "Color Name" : name)
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(BrandColor(name: "", hex: hexInput).contrastTextColor)
+                        .foregroundColor(contrastTextColor)
 
                     Text(hexInput.uppercased())
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                        .foregroundColor(BrandColor(name: "", hex: hexInput).contrastTextColor.opacity(0.85))
+                        .foregroundColor(contrastTextColor.opacity(0.85))
                 }
             }
             .frame(maxWidth: .infinity)
@@ -87,8 +112,19 @@ public struct AddColorSheet: View {
                             .foregroundColor(Color(red: 0.35, green: 0.35, blue: 0.38))
                         TextField("#HEX", text: $hexInput)
                             .textFieldStyle(.roundedBorder)
+                            .autocorrectionDisabled()
+                            .font(.system(size: 12, design: .monospaced))
                             .onChange(of: hexInput) { newHex in
-                                selectedColor = Color(hex: newHex)
+                                if isCompleteValidHex(newHex) {
+                                    let clean = cleanHex(newHex)
+                                    let formatted = "#" + clean
+                                    let newColor = Color(hex: formatted)
+                                    if newColor != selectedColor {
+                                        isProgrammaticUpdate = true
+                                        selectedColor = newColor
+                                        isProgrammaticUpdate = false
+                                    }
+                                }
                             }
                     }
 
@@ -99,6 +135,7 @@ public struct AddColorSheet: View {
                         ColorPicker("", selection: $selectedColor, supportsOpacity: false)
                             .labelsHidden()
                             .onChange(of: selectedColor) { newColor in
+                                guard !isProgrammaticUpdate else { return }
                                 hexInput = newColor.toHex()
                             }
                             .frame(height: 22)
@@ -127,8 +164,10 @@ public struct AddColorSheet: View {
                         ForEach(presetHexes, id: \.self) { hex in
                             let isPicked = hexInput.uppercased() == hex.uppercased()
                             Button(action: {
+                                isProgrammaticUpdate = true
                                 hexInput = hex
                                 selectedColor = Color(hex: hex)
+                                isProgrammaticUpdate = false
                             }) {
                                 Circle()
                                     .fill(Color(hex: hex))
@@ -157,11 +196,13 @@ public struct AddColorSheet: View {
 
                 Button("Add Color") {
                     let finalName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !finalName.isEmpty else { return }
+                    guard !finalName.isEmpty && isCompleteValidHex(hexInput) else { return }
+                    let clean = cleanHex(hexInput)
+                    let formattedHex = "#" + clean.uppercased()
                     store.addColor(
                         to: brand,
                         name: finalName,
-                        hex: hexInput,
+                        hex: formattedHex,
                         role: selectedRole
                     )
                     onClose?()
@@ -169,7 +210,7 @@ public struct AddColorSheet: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(brand.accentColor)
-                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !isCompleteValidHex(hexInput))
                 .keyboardShortcut(.defaultAction)
             }
             .padding(.top, 4)
