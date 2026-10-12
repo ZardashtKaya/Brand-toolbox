@@ -1,7 +1,6 @@
 # Branding Toolbox 🎨
 
-A native macOS companion dock and Dynamic Island overlay for instant brand color hex copying and logo drag-and-drop. Developed by [zardashtkaya](https://github.com/zardashtkaya).
-
+A native macOS companion dock and Dynamic Island overlay for instant brand color hex copying and logo drag-and-drop.
 ---
 
 ## ✨ Features
