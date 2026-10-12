@@ -160,12 +160,22 @@ public struct DynamicIslandMiniView: View {
                 HStack(alignment: .top, spacing: 14) {
                     // LEFT: Colors
                     VStack(alignment: .leading, spacing: 6) {
-                        HStack {
+                        HStack(spacing: 8) {
                             Text("COLORS")
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundColor(.white.opacity(0.45))
                                 .tracking(0.6)
                             Spacer()
+                            Button(action: {
+                                store.pasteColorsFromClipboard(for: brand)
+                            }) {
+                                Image(systemName: "doc.on.clipboard")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(store.hoveredSection == .colors ? brand.accentColor : Color.white.opacity(0.45))
+                            }
+                            .buttonStyle(.plain)
+                            .help("Paste Colors from Clipboard (⌘V)")
+
                             Button(action: {
                                 OverlayPanelController.shared.openAddColorWindow()
                             }) {
@@ -175,6 +185,15 @@ public struct DynamicIslandMiniView: View {
                             }
                             .buttonStyle(.plain)
                             .help("Add Color")
+                        }
+
+                        if store.hoveredSection == .colors {
+                            Button("") {
+                                store.pasteColorsFromClipboard(for: brand)
+                            }
+                            .keyboardShortcut("v", modifiers: .command)
+                            .frame(width: 0, height: 0)
+                            .opacity(0)
                         }
 
                         ScrollView(.vertical, showsIndicators: false) {
@@ -264,18 +283,39 @@ public struct DynamicIslandMiniView: View {
                         }
                     }
                     .frame(maxWidth: .infinity)
+                    .onHover { hovering in
+                        store.hoveredSection = hovering ? .colors : (store.hoveredSection == .colors ? .none : store.hoveredSection)
+                    }
+                    .contextMenu {
+                        Button("Paste Colors from Clipboard (⌘V)") {
+                            store.pasteColorsFromClipboard(for: brand)
+                        }
+                        Button("Add Color...") {
+                            OverlayPanelController.shared.openAddColorWindow()
+                        }
+                    }
 
                     Divider()
                         .background(Color.white.opacity(0.12))
 
                     // RIGHT: Logos
                     VStack(alignment: .leading, spacing: 6) {
-                        HStack {
+                        HStack(spacing: 8) {
                             Text("LOGOS")
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundColor(.white.opacity(0.45))
                                 .tracking(0.6)
                             Spacer()
+                            Button(action: {
+                                store.pasteLogosFromClipboard(for: brand)
+                            }) {
+                                Image(systemName: "doc.on.clipboard")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(store.hoveredSection == .logos ? brand.accentColor : Color.white.opacity(0.45))
+                            }
+                            .buttonStyle(.plain)
+                            .help("Paste SVG/PNG Logo from Clipboard (⌘V)")
+
                             Button(action: {
                                 pickAndAddLogo(for: brand)
                             }) {
@@ -285,6 +325,15 @@ public struct DynamicIslandMiniView: View {
                             }
                             .buttonStyle(.plain)
                             .help("Add Logo")
+                        }
+
+                        if store.hoveredSection == .logos {
+                            Button("") {
+                                store.pasteLogosFromClipboard(for: brand)
+                            }
+                            .keyboardShortcut("v", modifiers: .command)
+                            .frame(width: 0, height: 0)
+                            .opacity(0)
                         }
 
                         ScrollView(.vertical, showsIndicators: false) {
@@ -421,6 +470,17 @@ public struct DynamicIslandMiniView: View {
                         }
                     }
                     .frame(maxWidth: .infinity)
+                    .onHover { hovering in
+                        store.hoveredSection = hovering ? .logos : (store.hoveredSection == .logos ? .none : store.hoveredSection)
+                    }
+                    .contextMenu {
+                        Button("Paste Logo from Clipboard (⌘V)") {
+                            store.pasteLogosFromClipboard(for: brand)
+                        }
+                        Button("Add Logo File...") {
+                            pickAndAddLogo(for: brand)
+                        }
+                    }
                 }
             }
         }

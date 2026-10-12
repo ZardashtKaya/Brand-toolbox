@@ -3,6 +3,12 @@ import AppKit
 import UniformTypeIdentifiers
 import Combine
 
+public enum HoveredSection: Hashable {
+    case none
+    case colors
+    case logos
+}
+
 @MainActor
 public final class BrandStore: ObservableObject {
     public static let shared = BrandStore()
@@ -17,6 +23,7 @@ public final class BrandStore: ObservableObject {
     @Published public var autoHideDelay: Double = 0.35
     @Published public var lastCopiedHex: String? = nil
     @Published public var copiedToastMessage: String? = nil
+    @Published public var hoveredSection: HoveredSection = .none
 
     private var toastTimer: Task<Void, Never>?
 
@@ -517,6 +524,187 @@ public final class BrandStore: ObservableObject {
             )
             NSSound(named: "Glass")?.play()
         }
+    }
+
+    public struct ExtractedColor: Hashable {
+        public let name: String
+        public let hex: String
+        public init(name: String, hex: String) {
+            self.name = name
+            self.hex = hex
+        }
+    }
+
+    public func extractColors(from text: String) -> [ExtractedColor] {
+        var results: [ExtractedColor] = []
+        var seenHexes = Set<String>()
+
+        func normalizeExtractedHex(_ raw: String) -> String {
+            var clean = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            if clean.hasPrefix("#") { clean.removeFirst() }
+            else if clean.hasPrefix("0X") { clean.removeFirst(2) }
+            if clean.count == 3 {
+                clean = clean.map { "\($0)\($0)" }.joined()
+            }
+            return "#" + clean
+        }
+
+        func cleanExtractedName(_ raw: String) -> String {
+            var s = raw.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`$;,:- \t\n\r"))
+            if s.hasPrefix("--") { s.removeFirst(2) }
+            s = s.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`$;,:- \t\n\r"))
+            s = s.replacingOccurrences(of: "[-_]+", with: " ", options: .regularExpression)
+            let words = s.split(separator: " ").map { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }
+            return words.joined(separator: " ")
+        }
+
+        let lines = text.components(separatedBy: .newlines)
+        let namedRegex = try? NSRegularExpression(
+            pattern: #"["'`]?([a-zA-Z0-9_\-\s]{1,40})["'`]?\s*[:=-]\s*["'`\s]*(?:#|0x)([0-9a-fA-F]{3,8})\b"#,
+            options: .caseInsensitive
+        )
+        let hexRegex = try? NSRegularExpression(
+            pattern: #"(?:#|0x)([0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b"#,
+            options: .caseInsensitive
+        )
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let nsLine = trimmed as NSString
+            let fullRange = NSRange(location: 0, length: nsLine.length)
+
+            if let namedRegex = namedRegex {
+                let matches = namedRegex.matches(in: trimmed, options: [], range: fullRange)
+                for match in matches where match.numberOfRanges >= 3 {
+                    let nameRange = match.range(at: 1)
+                    let hexRange = match.range(at: 2)
+                    let rawName = nsLine.substring(with: nameRange)
+                    let rawHex = nsLine.substring(with: hexRange)
+                    let cleanedName = cleanExtractedName(rawName)
+                    let normHex = normalizeExtractedHex(rawHex)
+
+                    if !seenHexes.contains(normHex) {
+                        seenHexes.insert(normHex)
+                        let finalName = cleanedName.isEmpty ? "Color \(normHex)" : cleanedName
+                        results.append(ExtractedColor(name: finalName, hex: normHex))
+                    }
+                }
+            }
+
+            if let hexRegex = hexRegex {
+                let matches = hexRegex.matches(in: trimmed, options: [], range: fullRange)
+                for match in matches where match.numberOfRanges >= 2 {
+                    let hexRange = match.range(at: 1)
+                    let rawHex = nsLine.substring(with: hexRange)
+                    let normHex = normalizeExtractedHex(rawHex)
+
+                    if !seenHexes.contains(normHex) {
+                        seenHexes.insert(normHex)
+                        results.append(ExtractedColor(name: "Color \(normHex)", hex: normHex))
+                    }
+                }
+            }
+        }
+
+        // Fallback: standalone 6-character hex tokens with at least one digit
+        if results.isEmpty {
+            let rawTokenRegex = try? NSRegularExpression(pattern: #"\b([0-9a-fA-F]{6})\b"#, options: .caseInsensitive)
+            let nsText = text as NSString
+            let fullRange = NSRange(location: 0, length: nsText.length)
+            let matches = rawTokenRegex?.matches(in: text, options: [], range: fullRange) ?? []
+            for match in matches where match.numberOfRanges >= 2 {
+                let hex = nsText.substring(with: match.range(at: 1))
+                if hex.rangeOfCharacter(from: CharacterSet.decimalDigits) != nil {
+                    let normHex = "#" + hex.uppercased()
+                    if !seenHexes.contains(normHex) {
+                        seenHexes.insert(normHex)
+                        results.append(ExtractedColor(name: "Color \(normHex)", hex: normHex))
+                    }
+                }
+            }
+        }
+
+        return results
+    }
+
+    @discardableResult
+    public func pasteColorsFromClipboard(for brand: Brand) -> Bool {
+        guard let clipboardText = NSPasteboard.general.string(forType: .string),
+              !clipboardText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            showToast(message: "Clipboard is empty")
+            return false
+        }
+
+        let extracted = extractColors(from: clipboardText)
+        guard !extracted.isEmpty else {
+            showToast(message: "No hex colors found in clipboard")
+            return false
+        }
+
+        let existingHexes = Set(brand.colors.map { $0.formattedHex.uppercased() })
+        let newColors = extracted.filter { !existingHexes.contains($0.hex.uppercased()) }
+
+        if newColors.isEmpty {
+            showToast(message: "All colors found already in '\(brand.name)'")
+            return false
+        }
+
+        addColors(to: brand, colors: newColors.map { ($0.name, $0.hex, .custom) })
+        return true
+    }
+
+    @discardableResult
+    public func pasteLogosFromClipboard(for brand: Brand) -> Bool {
+        // 1. Check for file URLs (e.g. copied from Finder)
+        if let urls = NSPasteboard.general.readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !urls.isEmpty {
+            var addedAny = false
+            for url in urls {
+                let ext = url.pathExtension.lowercased()
+                if ["svg", "png", "jpg", "jpeg", "pdf", "webp", "tiff"].contains(ext) {
+                    addLogoFile(to: brand, fileURL: url)
+                    addedAny = true
+                }
+            }
+            if addedAny { return true }
+        }
+
+        // 2. Check for SVG string XML in clipboard text
+        if let svgString = NSPasteboard.general.string(forType: .string),
+           svgString.contains("<svg") && svgString.contains("</svg>"),
+           let data = svgString.data(using: .utf8) {
+            addLogoSVGData(to: brand, data: data, name: "\(brand.name) Vector Logo")
+            return true
+        }
+
+        // 3. Check for raw SVG data types
+        let svgType = NSPasteboard.PasteboardType("public.svg-image")
+        let svgXmlType = NSPasteboard.PasteboardType("image/svg+xml")
+        if let data = NSPasteboard.general.data(forType: svgType) ?? NSPasteboard.general.data(forType: svgXmlType) {
+            addLogoSVGData(to: brand, data: data, name: "\(brand.name) Vector Logo")
+            return true
+        }
+
+        // 4. Check for NSImage objects in pasteboard
+        if let images = NSPasteboard.general.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
+           let firstImage = images.first {
+            addLogoImage(to: brand, image: firstImage, name: "\(brand.name) Logo")
+            return true
+        }
+
+        // 5. Check for PNG / TIFF data representation
+        if let pngData = NSPasteboard.general.data(forType: .png), let image = NSImage(data: pngData) {
+            addLogoImage(to: brand, image: image, name: "\(brand.name) Logo")
+            return true
+        }
+
+        if let tiffData = NSPasteboard.general.data(forType: .tiff), let image = NSImage(data: tiffData) {
+            addLogoImage(to: brand, image: image, name: "\(brand.name) Logo")
+            return true
+        }
+
+        showToast(message: "No logo or image found in clipboard")
+        return false
     }
 
     public func updateColor(in brand: Brand, color: BrandColor) {

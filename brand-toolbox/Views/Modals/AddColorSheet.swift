@@ -51,107 +51,9 @@ public struct AddColorSheet: View {
         return clean.unicodeScalars.allSatisfy { hexDigits.contains($0) }
     }
 
-    private struct ExtractedColor {
-        let name: String
-        let hex: String
-    }
-
-    private func normalizeExtractedHex(_ raw: String) -> String {
-        var clean = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        if clean.hasPrefix("#") { clean.removeFirst() }
-        else if clean.hasPrefix("0X") { clean.removeFirst(2) }
-        if clean.count == 3 {
-            clean = clean.map { "\($0)\($0)" }.joined()
-        }
-        return "#" + clean
-    }
-
-    private func cleanExtractedName(_ raw: String) -> String {
-        var s = raw.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`$;,:- \t\n\r"))
-        if s.hasPrefix("--") { s.removeFirst(2) }
-        s = s.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`$;,:- \t\n\r"))
-        s = s.replacingOccurrences(of: "[-_]+", with: " ", options: .regularExpression)
-        let words = s.split(separator: " ").map { $0.prefix(1).uppercased() + $0.dropFirst().lowercased() }
-        return words.joined(separator: " ")
-    }
-
-    private func extractColors(from text: String) -> [ExtractedColor] {
-        var results: [ExtractedColor] = []
-        var seenHexes = Set<String>()
-
-        let lines = text.components(separatedBy: .newlines)
-        let namedRegex = try? NSRegularExpression(
-            pattern: #"["'`]?([a-zA-Z0-9_\-\s]{1,40})["'`]?\s*[:=-]\s*["'`\s]*(?:#|0x)([0-9a-fA-F]{3,8})\b"#,
-            options: .caseInsensitive
-        )
-        let hexRegex = try? NSRegularExpression(
-            pattern: #"(?:#|0x)([0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b"#,
-            options: .caseInsensitive
-        )
-
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { continue }
-            let nsLine = trimmed as NSString
-            let fullRange = NSRange(location: 0, length: nsLine.length)
-
-            if let namedRegex = namedRegex {
-                let matches = namedRegex.matches(in: trimmed, options: [], range: fullRange)
-                for match in matches where match.numberOfRanges >= 3 {
-                    let nameRange = match.range(at: 1)
-                    let hexRange = match.range(at: 2)
-                    let rawName = nsLine.substring(with: nameRange)
-                    let rawHex = nsLine.substring(with: hexRange)
-                    let cleanedName = cleanExtractedName(rawName)
-                    let normHex = normalizeExtractedHex(rawHex)
-
-                    if !seenHexes.contains(normHex) {
-                        seenHexes.insert(normHex)
-                        let finalName = cleanedName.isEmpty ? "Color \(normHex)" : cleanedName
-                        results.append(ExtractedColor(name: finalName, hex: normHex))
-                    }
-                }
-            }
-
-            if let hexRegex = hexRegex {
-                let matches = hexRegex.matches(in: trimmed, options: [], range: fullRange)
-                for match in matches where match.numberOfRanges >= 2 {
-                    let hexRange = match.range(at: 1)
-                    let rawHex = nsLine.substring(with: hexRange)
-                    let normHex = normalizeExtractedHex(rawHex)
-
-                    if !seenHexes.contains(normHex) {
-                        seenHexes.insert(normHex)
-                        results.append(ExtractedColor(name: "Color \(normHex)", hex: normHex))
-                    }
-                }
-            }
-        }
-
-        // Fallback: standalone 6-character hex tokens with at least one digit
-        if results.isEmpty {
-            let rawTokenRegex = try? NSRegularExpression(pattern: #"\b([0-9a-fA-F]{6})\b"#, options: .caseInsensitive)
-            let nsText = text as NSString
-            let fullRange = NSRange(location: 0, length: nsText.length)
-            let matches = rawTokenRegex?.matches(in: text, options: [], range: fullRange) ?? []
-            for match in matches where match.numberOfRanges >= 2 {
-                let hex = nsText.substring(with: match.range(at: 1))
-                if hex.rangeOfCharacter(from: CharacterSet.decimalDigits) != nil {
-                    let normHex = "#" + hex.uppercased()
-                    if !seenHexes.contains(normHex) {
-                        seenHexes.insert(normHex)
-                        results.append(ExtractedColor(name: "Color \(normHex)", hex: normHex))
-                    }
-                }
-            }
-        }
-
-        return results
-    }
-
     private func scanClipboardPreview() {
         if let text = NSPasteboard.general.string(forType: .string), !text.isEmpty {
-            let colors = extractColors(from: text)
+            let colors = store.extractColors(from: text)
             clipboardColorCount = colors.count
         }
     }
@@ -164,7 +66,7 @@ public struct AddColorSheet: View {
             return
         }
 
-        let extracted = extractColors(from: clipboardText)
+        let extracted = store.extractColors(from: clipboardText)
         guard !extracted.isEmpty else {
             statusMessage = "No hex colors found in clipboard. Copy hex codes (e.g. #0071E3, #FF5E5B) and try again."
             isErrorStatus = true

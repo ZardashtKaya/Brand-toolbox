@@ -12,6 +12,25 @@ public final class OverlayPanel: NSPanel {
     public override var canBecomeMain: Bool {
         return false
     }
+
+    public override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+           event.charactersIgnoringModifiers == "v" {
+            let store = BrandStore.shared
+            if let brand = store.selectedBrand {
+                if store.hoveredSection == .logos {
+                    if store.pasteLogosFromClipboard(for: brand) {
+                        return true
+                    }
+                } else if store.hoveredSection == .colors {
+                    if store.pasteColorsFromClipboard(for: brand) {
+                        return true
+                    }
+                }
+            }
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 }
 
 // MARK: - Overlay Panel Controller
@@ -30,6 +49,7 @@ public final class OverlayPanelController: ObservableObject {
     private var localMoveMonitor: Any?
     private var globalClickMonitor: Any?
     private var localClickMonitor: Any?
+    private var localKeyDownMonitor: Any?
 
     private var autoCollapseWorkItem: DispatchWorkItem?
     private var settingsWindowController: NSWindowController?
@@ -440,6 +460,25 @@ public final class OverlayPanelController: ObservableObject {
             }
             return event
         }
+
+        localKeyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+               event.charactersIgnoringModifiers == "v" {
+                let store = BrandStore.shared
+                if let brand = store.selectedBrand {
+                    if store.hoveredSection == .logos {
+                        if store.pasteLogosFromClipboard(for: brand) {
+                            return nil
+                        }
+                    } else if store.hoveredSection == .colors {
+                        if store.pasteColorsFromClipboard(for: brand) {
+                            return nil
+                        }
+                    }
+                }
+            }
+            return event
+        }
     }
 
     private func stopMouseMonitoring() {
@@ -447,15 +486,23 @@ public final class OverlayPanelController: ObservableObject {
         if let l = localMoveMonitor { NSEvent.removeMonitor(l) }
         if let gc = globalClickMonitor { NSEvent.removeMonitor(gc) }
         if let lc = localClickMonitor { NSEvent.removeMonitor(lc) }
+        if let kd = localKeyDownMonitor { NSEvent.removeMonitor(kd) }
         globalMoveMonitor = nil
         localMoveMonitor = nil
         globalClickMonitor = nil
         localClickMonitor = nil
+        localKeyDownMonitor = nil
     }
 
     private func handleMouseMoved(_ location: NSPoint) {
         guard let panel, let screen = targetScreen() else { return }
         let panelFrame = panel.frame
+
+        if isExpanded && NSMouseInRect(location, panelFrame, false) {
+            if !panel.isKeyWindow {
+                panel.makeKey()
+            }
+        }
 
         // Never auto-collapse if user is actively interacting with a menu/sheet, or pinned
         if isInteracting || store.isPinned {
