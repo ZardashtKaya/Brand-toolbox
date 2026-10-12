@@ -357,7 +357,7 @@ public final class OverlayPanelController: ObservableObject {
 
     private func calculatePanelFrame(isExpanded: Bool, screen: NSScreen? = nil) -> NSRect {
         guard let screen = screen ?? targetScreen() else {
-            return NSRect(x: 14, y: 200, width: 76, height: 380)
+            return NSRect(x: 14, y: 200, width: 196, height: 380)
         }
 
         let sFrame = screen.frame

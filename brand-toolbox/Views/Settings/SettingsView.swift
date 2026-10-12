@@ -39,12 +39,12 @@ public struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.radioGroup)
-                .onChange(of: store.overlayMode) { _ in
+                .onChange(of: store.overlayMode) {
                     store.savePreferences()
                 }
 
                 Toggle("Pin by Default (Keep open)", isOn: $store.isPinned)
-                    .onChange(of: store.isPinned) { _ in
+                    .onChange(of: store.isPinned) {
                         store.savePreferences()
                     }
             }
@@ -55,14 +55,14 @@ public struct SettingsView: View {
                         Text(format.title).tag(format)
                     }
                 }
-                .onChange(of: store.copyFormat) { _ in
+                .onChange(of: store.copyFormat) {
                     store.savePreferences()
                 }
 
-                Toggle("Sound & Haptic Feedback", isOn: $store.soundAndHaptics)
-                    .onChange(of: store.soundAndHaptics) { _ in
-                        store.savePreferences()
-                    }
+            Toggle("Sound & Haptic Feedback", isOn: $store.soundAndHaptics)
+                .onChange(of: store.soundAndHaptics) {
+                    store.savePreferences()
+                }
             }
 
             Section("Hover & Edge Behavior") {
@@ -73,7 +73,7 @@ public struct SettingsView: View {
                         .monospacedDigit()
                         .frame(width: 45)
                 }
-                .onChange(of: store.edgeSensitivityPx) { _ in
+                .onChange(of: store.edgeSensitivityPx) {
                     store.savePreferences()
                 }
 
@@ -84,7 +84,7 @@ public struct SettingsView: View {
                         .monospacedDigit()
                         .frame(width: 45)
                 }
-                .onChange(of: store.autoHideDelay) { _ in
+                .onChange(of: store.autoHideDelay) {
                     store.savePreferences()
                 }
             }

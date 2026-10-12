@@ -9,7 +9,6 @@ public final class BrandStore: ObservableObject {
 
     @Published public var brands: [Brand] = []
     @Published public var selectedBrandId: UUID?
-    @Published public var searchQuery: String = ""
     @Published public var overlayMode: OverlayPositionMode = .leftDock
     @Published public var isPinned: Bool = false
     @Published public var copyFormat: CopyFormat = .hexHash
@@ -22,7 +21,7 @@ public final class BrandStore: ObservableObject {
     private var toastTimer: Task<Void, Never>?
 
     private let fileManager = FileManager.default
-    private var appSupportURL: URL {now
+    private var appSupportURL: URL {
         let paths = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)
         let dir = paths[0].appendingPathComponent("BrandToolbox", isDirectory: true)
         if !fileManager.fileExists(atPath: dir.path) {
@@ -52,44 +51,6 @@ public final class BrandStore: ObservableObject {
             return found
         }
         return brands.first
-    }
-
-    public var filteredColors: [BrandColor] {
-        guard let brand = selectedBrand else { return [] }
-        if searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return brand.colors
-        }
-        let q = searchQuery.lowercased()
-        return brand.colors.filter {
-            $0.name.lowercased().contains(q) || $0.hex.lowercased().contains(q)
-        }
-    }
-
-    public var filteredLogos: [BrandLogo] {
-        guard let brand = selectedBrand else { return [] }
-        if searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return brand.logos
-        }
-        let q = searchQuery.lowercased()
-        return brand.logos.filter {
-            $0.name.lowercased().contains(q)
-        }
-    }
-
-    public func cycleToNextBrand() {
-        guard !brands.isEmpty else { return }
-        if let curId = selectedBrandId, let idx = brands.firstIndex(where: { $0.id == curId }) {
-            let nextIdx = (idx + 1) % brands.count
-            selectedBrandId = brands[nextIdx].id
-        } else {
-            selectedBrandId = brands.first?.id
-        }
-        savePreferences()
-        if soundAndHaptics {
-            NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
-            NSSound(named: "Pop")?.play()
-        }
-        showToast(message: "Brand: \(selectedBrand?.name ?? "")")
     }
 
     public func idealDockHeight(maxAllowed: CGFloat = 560) -> CGFloat {

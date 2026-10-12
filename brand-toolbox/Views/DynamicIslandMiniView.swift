@@ -11,7 +11,6 @@ public struct DynamicIslandMiniView: View {
     public let onSwitchMode: () -> Void
     public let onOpenSettings: () -> Void
 
-    @State private var showingBrandMenu: Bool = false
     @State private var copiedColorId: UUID? = nil
     @State private var copiedLogoId: UUID? = nil
     @State private var copiedFontId: UUID? = nil
