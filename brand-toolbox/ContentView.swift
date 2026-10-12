@@ -10,3 +10,9 @@ struct BrandToolboxApp: App {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("Brand Toolbox Settings") {
+    SettingsView(store: .shared)
+}

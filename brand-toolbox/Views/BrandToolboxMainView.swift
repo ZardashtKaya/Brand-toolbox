@@ -50,3 +50,74 @@ public struct BrandToolboxMainView: View {
         }
     }
 }
+
+// MARK: - Previews
+
+#Preview("Vertical Dock Mode") {
+    ZStack {
+        LinearGradient(
+            colors: [Color.indigo.opacity(0.6), Color.black.opacity(0.9)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
+
+        HStack {
+            BrandToolboxMainView(
+                store: {
+                    let s = BrandStore.shared
+                    s.overlayMode = .leftDock
+                    return s
+                }(),
+                isExpanded: .constant(true)
+            )
+            .padding(.leading, 12)
+            Spacer()
+        }
+    }
+    .frame(width: 400, height: 600)
+}
+
+#Preview("Dynamic Island - Expanded") {
+    ZStack(alignment: .top) {
+        LinearGradient(
+            colors: [Color.indigo.opacity(0.6), Color.black.opacity(0.9)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
+
+        BrandToolboxMainView(
+            store: {
+                let s = BrandStore.shared
+                s.overlayMode = .dynamicIsland
+                return s
+            }(),
+            isExpanded: .constant(true)
+        )
+        .padding(.top, 12)
+    }
+    .frame(width: 480, height: 420)
+}
+
+#Preview("Dynamic Island - Collapsed") {
+    ZStack(alignment: .top) {
+        LinearGradient(
+            colors: [Color.indigo.opacity(0.6), Color.black.opacity(0.9)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
+
+        BrandToolboxMainView(
+            store: {
+                let s = BrandStore.shared
+                s.overlayMode = .dynamicIsland
+                return s
+            }(),
+            isExpanded: .constant(false)
+        )
+        .padding(.top, 12)
+    }
+    .frame(width: 340, height: 140)
+}

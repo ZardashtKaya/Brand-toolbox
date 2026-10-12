@@ -163,3 +163,9 @@ public struct SettingsView: View {
         .padding(.top, 24)
     }
 }
+
+// MARK: - Previews
+
+#Preview("Settings Window") {
+    SettingsView(store: .shared)
+}

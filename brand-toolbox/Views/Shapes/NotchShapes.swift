@@ -34,3 +34,29 @@ public struct ClosedPillShape: Shape {
         return path
     }
 }
+
+// MARK: - Previews
+
+#Preview("Closed Pill Shape") {
+    VStack(spacing: 20) {
+        ClosedPillShape()
+            .fill(Color.black)
+            .frame(width: 180, height: 32)
+            .overlay(
+                Text("Dynamic Island")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white)
+            )
+
+        ClosedPillShape(cornerRadius: 12)
+            .fill(Color.accentColor)
+            .frame(width: 220, height: 44)
+            .overlay(
+                Text("Custom Radius")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+            )
+    }
+    .padding(30)
+    .background(Color.gray.opacity(0.15))
+}

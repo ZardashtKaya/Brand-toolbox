@@ -179,3 +179,9 @@ public struct AddColorSheet: View {
         .background(Color.white)
     }
 }
+
+// MARK: - Previews
+
+#Preview("Add Color Sheet") {
+    AddColorSheet(store: .shared, brand: .mock)
+}

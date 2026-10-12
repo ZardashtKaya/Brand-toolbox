@@ -191,6 +191,13 @@ public struct BrandLogo: Identifiable, Codable, Hashable {
         self.isDarkVariant = isDarkVariant
         self.accentColorHex = accentColorHex
     }
+
+    public var isSVG: Bool {
+        if let fn = fileName?.lowercased(), fn.hasSuffix(".svg") {
+            return true
+        }
+        return false
+    }
 }
 
 // MARK: - Brand Font
@@ -270,6 +277,33 @@ public struct Brand: Identifiable, Codable, Hashable {
     public var primaryColor: BrandColor? {
         colors.first(where: { $0.role == .primary }) ?? colors.first
     }
+}
+
+// MARK: - Previews & Mock Data
+
+extension Brand {
+    public static let mock = Brand(
+        name: "Apple",
+        tagline: "Think Different",
+        iconSymbol: "apple.logo",
+        accentColorHex: "#0071E3",
+        colors: [
+            BrandColor(name: "Apple Blue", hex: "#0071E3", role: .primary),
+            BrandColor(name: "Space Black", hex: "#1D1D1F", role: .secondary),
+            BrandColor(name: "Silver", hex: "#F5F5F7", role: .surface),
+            BrandColor(name: "Product Red", hex: "#E30000", role: .accent)
+        ],
+        logos: [
+            BrandLogo(name: "Apple Mark", type: .file, fileName: "apple_logo.svg", isDarkVariant: false),
+            BrandLogo(name: "Apple Symbol", type: .systemSymbol, systemSymbol: "apple.logo", isDarkVariant: false)
+        ],
+        fonts: [
+            BrandFont(name: "SF Pro", role: "Primary"),
+            BrandFont(name: "SF Pro Rounded", role: "Accent"),
+            BrandFont(name: "New York", role: "Serif"),
+            BrandFont(name: "SF Mono", role: "Code")
+        ]
+    )
 }
 
 // MARK: - Color Hex Extensions

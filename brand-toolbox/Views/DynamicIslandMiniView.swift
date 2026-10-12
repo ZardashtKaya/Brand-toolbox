@@ -367,6 +367,24 @@ public struct DynamicIslandMiniView: View {
                                                     .foregroundColor(isDark ? .white : .black)
                                             }
 
+                                            // SVG Pill Badge
+                                            if store.isSVGLogo(logo) {
+                                                VStack {
+                                                    HStack {
+                                                        Spacer()
+                                                        Text("SVG")
+                                                            .font(.system(size: 7, weight: .heavy, design: .rounded))
+                                                            .foregroundColor(.white.opacity(0.9))
+                                                            .padding(.horizontal, 3.5)
+                                                            .padding(.vertical, 1.5)
+                                                            .background(Capsule().fill(Color.black.opacity(0.7)))
+                                                            .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
+                                                            .padding(3.5)
+                                                    }
+                                                    Spacer()
+                                                }
+                                            }
+
                                             if copiedLogoId == logo.id {
                                                 Color.black.opacity(0.7)
                                                     .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -382,8 +400,13 @@ public struct DynamicIslandMiniView: View {
                                         createDragProvider(for: logo)
                                     }
                                     .contextMenu {
-                                        Button("Copy Image") {
+                                        Button("Copy Logo") {
                                             store.copyLogoImage(logo)
+                                        }
+                                        if store.isSVGLogo(logo) {
+                                            Button("Copy SVG Code") {
+                                                store.copySVGCode(logo)
+                                            }
                                         }
                                         if let fileURL = store.fileURLForLogo(logo) {
                                             Button("Reveal in Finder") {
@@ -472,7 +495,7 @@ public struct DynamicIslandMiniView: View {
                     lineWidth: isDropTargeted ? 1.8 : 1.2
                 )
         )
-        .onDrop(of: [.fileURL, .image, .png, .jpeg, .tiff], isTargeted: $isDropTargeted) { providers in
+        .onDrop(of: [.fileURL, .image, .png, .jpeg, .tiff, .svg, .plainText], isTargeted: $isDropTargeted) { providers in
             if let brand = store.selectedBrand {
                 return store.handleDroppedProviders(providers, for: brand)
             }
@@ -499,14 +522,32 @@ public struct DynamicIslandMiniView: View {
     private func createDragProvider(for logo: BrandLogo) -> NSItemProvider {
         let provider = NSItemProvider()
         if let fileURL = store.fileURLForLogo(logo) {
+            let isSVG = store.isSVGLogo(logo)
+            let primaryType: UTType = isSVG ? .svg : .image
+
             provider.registerFileRepresentation(
-                forTypeIdentifier: UTType.image.identifier,
+                forTypeIdentifier: primaryType.identifier,
                 fileOptions: [],
                 visibility: .all
             ) { completion in
                 completion(fileURL, false, nil)
                 return nil
             }
+
+            if isSVG {
+                provider.registerFileRepresentation(
+                    forTypeIdentifier: UTType.image.identifier,
+                    fileOptions: [],
+                    visibility: .all
+                ) { completion in
+                    completion(fileURL, false, nil)
+                    return nil
+                }
+                if let svgContent = store.svgContentForLogo(logo) {
+                    provider.registerObject(svgContent as NSString, visibility: .all)
+                }
+            }
+
             provider.registerObject(fileURL as NSURL, visibility: .all)
             if let img = store.imageForLogo(logo) {
                 provider.registerObject(img, visibility: .all)
@@ -612,8 +653,46 @@ public struct DynamicIslandMiniView: View {
         }
         .buttonStyle(.plain)
         .help("Drag & drop an image or click to choose file")
-        .onDrop(of: [.fileURL, .image, .png, .jpeg, .tiff], isTargeted: $isLogoDropTargeted) { providers in
+        .onDrop(of: [.fileURL, .image, .png, .jpeg, .tiff, .svg, .plainText], isTargeted: $isLogoDropTargeted) { providers in
             store.handleDroppedProviders(providers, for: brand)
         }
     }
+}
+
+// MARK: - Previews
+
+#Preview("Dynamic Island - Expanded") {
+    ZStack(alignment: .top) {
+        LinearGradient(
+            colors: [Color(red: 0.12, green: 0.12, blue: 0.22), Color.black],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
+
+        DynamicIslandMiniView(
+            store: .shared,
+            isExpanded: true
+        )
+        .padding(.top, 16)
+    }
+    .frame(width: 480, height: 420)
+}
+
+#Preview("Dynamic Island - Closed Pill") {
+    ZStack(alignment: .top) {
+        LinearGradient(
+            colors: [Color(red: 0.12, green: 0.12, blue: 0.22), Color.black],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
+
+        DynamicIslandMiniView(
+            store: .shared,
+            isExpanded: false
+        )
+        .padding(.top, 16)
+    }
+    .frame(width: 320, height: 120)
 }

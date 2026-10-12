@@ -98,7 +98,7 @@ public struct MiniDockView: View {
                     lineWidth: isDropTargeted ? 1.8 : 1.2
                 )
         )
-        .onDrop(of: [.fileURL, .image, .png, .jpeg, .tiff], isTargeted: $isDropTargeted) { providers in
+        .onDrop(of: [.fileURL, .image, .png, .jpeg, .tiff, .svg, .plainText], isTargeted: $isDropTargeted) { providers in
             if let brand = store.selectedBrand {
                 return store.handleDroppedProviders(providers, for: brand)
             }
@@ -427,7 +427,7 @@ public struct MiniDockView: View {
         }
         .buttonStyle(.plain)
         .help("Drag & drop an image or click to choose file")
-        .onDrop(of: [.fileURL, .image, .png, .jpeg, .tiff], isTargeted: $isLogoDropTargeted) { providers in
+        .onDrop(of: [.fileURL, .image, .png, .jpeg, .tiff, .svg, .plainText], isTargeted: $isLogoDropTargeted) { providers in
             store.handleDroppedProviders(providers, for: brand)
         }
     }
@@ -435,6 +435,7 @@ public struct MiniDockView: View {
     private func logoTile(logo: BrandLogo, index: Int, brand: Brand) -> some View {
         let isDark = index >= 2
         let isCopied = copiedLogoId == logo.id
+        let isSVG = store.isSVGLogo(logo)
 
         return Button(action: {
             triggerCopyLogo(logo)
@@ -455,6 +456,24 @@ public struct MiniDockView: View {
                         .foregroundColor(isDark ? .white : .black)
                 }
 
+                // SVG Pill Badge
+                if isSVG {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Text("SVG")
+                                .font(.system(size: 7, weight: .heavy, design: .rounded))
+                                .foregroundColor(.white.opacity(0.9))
+                                .padding(.horizontal, 3.5)
+                                .padding(.vertical, 1.5)
+                                .background(Capsule().fill(Color.black.opacity(0.7)))
+                                .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
+                                .padding(3.5)
+                        }
+                        Spacer()
+                    }
+                }
+
                 if isCopied {
                     Color.black.opacity(0.7)
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -470,13 +489,18 @@ public struct MiniDockView: View {
             .shadow(color: Color.black.opacity(0.35), radius: 3, x: 0, y: 1.5)
         }
         .buttonStyle(.plain)
-        .help("\(logo.name) (Click to copy, Drag to use)")
+        .help("\(logo.name) (Click to copy, Drag to use, Right-click for options)")
         .onDrag {
             createDragProvider(for: logo)
         }
         .contextMenu {
-            Button("Copy Image") {
+            Button("Copy Logo") {
                 triggerCopyLogo(logo)
+            }
+            if isSVG {
+                Button("Copy SVG Code") {
+                    store.copySVGCode(logo)
+                }
             }
             if let fileURL = store.fileURLForLogo(logo) {
                 Button("Reveal in Finder") {
@@ -507,14 +531,32 @@ public struct MiniDockView: View {
     private func createDragProvider(for logo: BrandLogo) -> NSItemProvider {
         let provider = NSItemProvider()
         if let fileURL = store.fileURLForLogo(logo) {
+            let isSVG = store.isSVGLogo(logo)
+            let primaryType: UTType = isSVG ? .svg : .image
+
             provider.registerFileRepresentation(
-                forTypeIdentifier: UTType.image.identifier,
+                forTypeIdentifier: primaryType.identifier,
                 fileOptions: [],
                 visibility: .all
             ) { completion in
                 completion(fileURL, false, nil)
                 return nil
             }
+
+            if isSVG {
+                provider.registerFileRepresentation(
+                    forTypeIdentifier: UTType.image.identifier,
+                    fileOptions: [],
+                    visibility: .all
+                ) { completion in
+                    completion(fileURL, false, nil)
+                    return nil
+                }
+                if let svgContent = store.svgContentForLogo(logo) {
+                    provider.registerObject(svgContent as NSString, visibility: .all)
+                }
+            }
+
             provider.registerObject(fileURL as NSURL, visibility: .all)
             if let img = store.imageForLogo(logo) {
                 provider.registerObject(img, visibility: .all)
@@ -661,4 +703,32 @@ public struct MiniDockView: View {
         }
         OverlayPanelController.shared.isInteracting = false
     }
+}
+
+// MARK: - Previews
+
+#Preview("Mini Dock - Dark Desktop") {
+    ZStack {
+        LinearGradient(
+            colors: [Color(red: 0.1, green: 0.12, blue: 0.18), Color(red: 0.04, green: 0.04, blue: 0.06)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
+
+        MiniDockView(store: .shared)
+            .padding(16)
+    }
+    .frame(width: 260, height: 580)
+}
+
+#Preview("Mini Dock - Light Background") {
+    ZStack {
+        Color(white: 0.94)
+            .ignoresSafeArea()
+
+        MiniDockView(store: .shared)
+            .padding(16)
+    }
+    .frame(width: 260, height: 580)
 }

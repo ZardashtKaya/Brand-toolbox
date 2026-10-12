@@ -197,3 +197,9 @@ public struct AddBrandSheet: View {
         .background(Color.white)
     }
 }
+
+// MARK: - Previews
+
+#Preview("Add Brand Sheet") {
+    AddBrandSheet(store: .shared)
+}

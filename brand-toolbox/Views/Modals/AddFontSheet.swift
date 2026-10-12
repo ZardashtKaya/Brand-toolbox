@@ -184,3 +184,9 @@ public struct AddFontSheet: View {
         .background(Color.white)
     }
 }
+
+// MARK: - Previews
+
+#Preview("Add Font Sheet") {
+    AddFontSheet(store: .shared, brand: .mock)
+}
