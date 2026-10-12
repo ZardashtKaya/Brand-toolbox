@@ -339,9 +339,19 @@ public final class OverlayPanelController: ObservableObject {
                 context.duration = 0.28
                 context.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 panel.animator().setFrame(targetFrame, display: true)
+                if store.overlayMode == .dynamicIsland {
+                    panel.animator().alphaValue = isExpanded ? 1.0 : 0.0
+                } else {
+                    panel.animator().alphaValue = 1.0
+                }
             }
         } else {
             panel.setFrame(targetFrame, display: true)
+            if store.overlayMode == .dynamicIsland {
+                panel.alphaValue = isExpanded ? 1.0 : 0.0
+            } else {
+                panel.alphaValue = 1.0
+            }
         }
     }
 
@@ -378,20 +388,12 @@ public final class OverlayPanelController: ObservableObject {
             return NSRect(x: x, y: y, width: width, height: height)
 
         case .dynamicIsland:
-            if isExpanded {
-                let width: CGFloat = 440
-                let height: CGFloat = 220
-                let x = sFrame.midX - (width / 2)
-                let topOffset: CGFloat = screen.hasNotch ? screen.notchHeight + 2 : 10
-                let y = sFrame.maxY - height - topOffset
-                return NSRect(x: x, y: y, width: width, height: height)
-            } else {
-                let width: CGFloat = 210
-                let height: CGFloat = 36
-                let x = sFrame.midX - (width / 2)
-                let y = sFrame.maxY - height - (screen.hasNotch ? 0 : 8)
-                return NSRect(x: x, y: y, width: width, height: height)
-            }
+            let width: CGFloat = 440
+            let height: CGFloat = 220
+            let x = sFrame.midX - (width / 2)
+            let topOffset: CGFloat = screen.hasNotch ? screen.notchHeight + 2 : 10
+            let y = isExpanded ? (sFrame.maxY - height - topOffset) : (sFrame.maxY + 10)
+            return NSRect(x: x, y: y, width: width, height: height)
         }
     }
 

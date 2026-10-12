@@ -5,7 +5,6 @@ import UniformTypeIdentifiers
 @MainActor
 public struct DynamicIslandMiniView: View {
     @ObservedObject var store: BrandStore
-    public let isExpanded: Bool
     public let onToggleExpand: () -> Void
     public let onTogglePin: () -> Void
     public let onSwitchMode: () -> Void
@@ -19,14 +18,13 @@ public struct DynamicIslandMiniView: View {
 
     public init(
         store: BrandStore = .shared,
-        isExpanded: Bool,
+        isExpanded: Bool = true,
         onToggleExpand: @escaping () -> Void = {},
         onTogglePin: @escaping () -> Void = {},
         onSwitchMode: @escaping () -> Void = {},
         onOpenSettings: @escaping () -> Void = {}
     ) {
         self.store = store
-        self.isExpanded = isExpanded
         self.onToggleExpand = onToggleExpand
         self.onTogglePin = onTogglePin
         self.onSwitchMode = onSwitchMode
@@ -34,58 +32,7 @@ public struct DynamicIslandMiniView: View {
     }
 
     public var body: some View {
-        Group {
-            if isExpanded {
-                fullyOpenedIslandView
-            } else {
-                closedPillView
-            }
-        }
-    }
-
-    // MARK: - Closed Pill View (Hugs the notch / Dynamic Island)
-
-    private var closedPillView: some View {
-        Button(action: onToggleExpand) {
-            HStack(spacing: 8) {
-                if let brand = store.selectedBrand {
-                    // Brand Icon Dot
-                    Circle()
-                        .fill(brand.accentColor)
-                        .frame(width: 14, height: 14)
-
-                    Text(brand.name)
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.white)
-
-                    Spacer(minLength: 4)
-
-                    // Color capsules preview
-                    HStack(spacing: 3) {
-                        ForEach(brand.colors.prefix(3)) { c in
-                            Capsule()
-                                .fill(c.swiftUIColor)
-                                .frame(width: 14, height: 8)
-                        }
-                    }
-
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.white.opacity(0.5))
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .frame(width: 210, height: 36)
-            .background(Color(red: 0.05, green: 0.05, blue: 0.06))
-            .clipShape(ClosedPillShape(cornerRadius: 18))
-            .overlay(
-                ClosedPillShape(cornerRadius: 18)
-                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .help("Click to expand Brand Island")
+        fullyOpenedIslandView
     }
 
     // MARK: - Fully Opened Island View
@@ -360,7 +307,7 @@ public struct DynamicIslandMiniView: View {
                                                 Image(nsImage: img)
                                                     .resizable()
                                                     .aspectRatio(contentMode: .fit)
-                                                    .padding(6)
+                                                    .padding(8)
                                             } else {
                                                 Text(logo.name.prefix(4).uppercased())
                                                     .font(.system(size: 9, weight: .bold))
@@ -661,7 +608,7 @@ public struct DynamicIslandMiniView: View {
 
 // MARK: - Previews
 
-#Preview("Dynamic Island - Expanded") {
+#Preview("Dynamic Island") {
     ZStack(alignment: .top) {
         LinearGradient(
             colors: [Color(red: 0.12, green: 0.12, blue: 0.22), Color.black],
@@ -671,28 +618,9 @@ public struct DynamicIslandMiniView: View {
         .ignoresSafeArea()
 
         DynamicIslandMiniView(
-            store: .shared,
-            isExpanded: true
+            store: .shared
         )
         .padding(.top, 16)
     }
     .frame(width: 480, height: 420)
-}
-
-#Preview("Dynamic Island - Closed Pill") {
-    ZStack(alignment: .top) {
-        LinearGradient(
-            colors: [Color(red: 0.12, green: 0.12, blue: 0.22), Color.black],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .ignoresSafeArea()
-
-        DynamicIslandMiniView(
-            store: .shared,
-            isExpanded: false
-        )
-        .padding(.top, 16)
-    }
-    .frame(width: 320, height: 120)
 }
