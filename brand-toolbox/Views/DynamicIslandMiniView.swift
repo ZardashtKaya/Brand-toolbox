@@ -12,10 +12,9 @@ public struct DynamicIslandMiniView: View {
     public let onOpenSettings: () -> Void
 
     @State private var showingBrandMenu: Bool = false
-    @State private var showingAddBrandSheet: Bool = false
-    @State private var showingAddColorSheet: Bool = false
     @State private var copiedColorId: UUID? = nil
     @State private var copiedLogoId: UUID? = nil
+    @State private var isDropTargeted: Bool = false
 
     public init(
         store: BrandStore = .shared,
@@ -36,28 +35,20 @@ public struct DynamicIslandMiniView: View {
     public var body: some View {
         Group {
             if isExpanded {
-                expandedIslandView
+                fullyOpenedIslandView
             } else {
                 closedPillView
             }
         }
-        .sheet(isPresented: $showingAddBrandSheet) {
-            AddBrandSheet(store: store)
-        }
-        .sheet(isPresented: $showingAddColorSheet) {
-            if let brand = store.selectedBrand {
-                AddColorSheet(store: store, brand: brand)
-            }
-        }
     }
 
-    // MARK: - Closed Pill View
+    // MARK: - Closed Pill View (Hugs the notch / Dynamic Island)
 
     private var closedPillView: some View {
         Button(action: onToggleExpand) {
             HStack(spacing: 8) {
                 if let brand = store.selectedBrand {
-                    // Accent dot
+                    // Brand Icon Dot
                     Circle()
                         .fill(brand.accentColor)
                         .frame(width: 14, height: 14)
@@ -91,161 +82,272 @@ public struct DynamicIslandMiniView: View {
                 ClosedPillShape(cornerRadius: 18)
                     .stroke(Color.white.opacity(0.18), lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(0.5), radius: 10, x: 0, y: 4)
+            .shadow(color: Color.black.opacity(0.55), radius: 12, x: 0, y: 4)
         }
         .buttonStyle(.plain)
+        .help("Click to expand Brand Island")
     }
 
-    // MARK: - Expanded Island View
+    // MARK: - Fully Opened Island View
 
-    private var expandedIslandView: some View {
-        HStack(spacing: 12) {
-            // Colors stack
-            HStack(spacing: 6) {
-                if let brand = store.selectedBrand {
-                    ForEach(Array(brand.colors.prefix(3))) { color in
-                        let isCopied = copiedColorId == color.id
-                        Button(action: {
-                            store.copyColor(color)
-                            copiedColorId = color.id
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                                if copiedColorId == color.id { copiedColorId = nil }
-                            }
-                        }) {
-                            ZStack {
-                                Capsule()
-                                    .fill(color.swiftUIColor)
-                                    .frame(width: 44, height: 26)
-                                    .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.8))
-
-                                if isCopied {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(color.contrastTextColor)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .help("\(color.name): \(color.formattedHex)")
-                    }
-                }
-            }
-
-            Divider()
-                .frame(height: 36)
-                .background(Color.white.opacity(0.15))
-
-            // Logos stack
+    private var fullyOpenedIslandView: some View {
+        VStack(spacing: 10) {
+            // Header Bar
             HStack(spacing: 8) {
-                if let brand = store.selectedBrand {
-                    ForEach(Array(brand.logos.prefix(3).enumerated()), id: \.element.id) { idx, logo in
-                        let isDark = idx >= 2
+                // Brand selector chips
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(store.brands) { brand in
+                            let isSel = store.selectedBrandId == brand.id
+                            Button(action: {
+                                store.selectedBrandId = brand.id
+                                store.savePreferences()
+                            }) {
+                                HStack(spacing: 5) {
+                                    Circle()
+                                        .fill(brand.accentColor)
+                                        .frame(width: 8, height: 8)
+                                    Text(brand.name)
+                                        .font(.system(size: 11, weight: isSel ? .bold : .medium))
+                                        .foregroundColor(isSel ? .white : .white.opacity(0.6))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(isSel ? Color.white.opacity(0.16) : Color.white.opacity(0.04)))
+                                .overlay(
+                                    Capsule().stroke(isSel ? brand.accentColor.opacity(0.6) : Color.clear, lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+
                         Button(action: {
-                            store.copyLogoImage(logo)
-                            copiedLogoId = logo.id
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                                if copiedLogoId == logo.id { copiedLogoId = nil }
-                            }
+                            OverlayPanelController.shared.openAddBrandWindow()
                         }) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(isDark ? Color.gray.opacity(0.3) : Color.white)
-                                    .frame(width: 38, height: 38)
-
-                                if let img = store.imageForLogo(logo) {
-                                    Image(nsImage: img)
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fit)
-                                        .padding(4)
-                                        .frame(width: 38, height: 38)
-                                } else {
-                                    Text("LOGO")
-                                        .font(.system(size: 8, weight: .bold))
-                                        .foregroundColor(isDark ? .white : .black)
-                                }
-
-                                if copiedLogoId == logo.id {
-                                    Color.black.opacity(0.7)
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 12, weight: .bold))
-                                        .foregroundColor(.green)
-                                }
-                            }
+                            Image(systemName: "plus")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.white.opacity(0.6))
+                                .padding(5)
+                                .background(Circle().fill(Color.white.opacity(0.06)))
                         }
                         .buttonStyle(.plain)
-                        .onDrag {
-                            let p = NSItemProvider()
-                            if let f = store.fileURLForLogo(logo) {
-                                p.registerObject(f as NSURL, visibility: .all)
-                            }
-                            if let img = store.imageForLogo(logo) {
-                                p.registerObject(img, visibility: .all)
-                            }
-                            return p
-                        }
                     }
                 }
+
+                Spacer()
+
+                // Switch to Left Dock Mode
+                Button(action: onSwitchMode) {
+                    Image(systemName: "sidebar.left")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.75))
+                        .padding(5)
+                        .background(Circle().fill(Color.white.opacity(0.08)))
+                }
+                .buttonStyle(.plain)
+                .help("Switch to Left Dock Mode")
+
+                // Pin Button
+                Button(action: onTogglePin) {
+                    Image(systemName: store.isPinned ? "pin.fill" : "pin")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(store.isPinned ? .yellow : .white.opacity(0.75))
+                        .padding(5)
+                        .background(Circle().fill(store.isPinned ? Color.yellow.opacity(0.2) : Color.white.opacity(0.08)))
+                }
+                .buttonStyle(.plain)
+                .help(store.isPinned ? "Unpin" : "Pin open")
+
+                // Settings
+                Button(action: onOpenSettings) {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.75))
+                        .padding(5)
+                        .background(Circle().fill(Color.white.opacity(0.08)))
+                }
+                .buttonStyle(.plain)
+
+                // Collapse Button
+                Button(action: onToggleExpand) {
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white.opacity(0.75))
+                        .padding(5)
+                        .background(Circle().fill(Color.white.opacity(0.08)))
+                }
+                .buttonStyle(.plain)
+                .help("Collapse")
             }
 
             Divider()
-                .frame(height: 36)
-                .background(Color.white.opacity(0.15))
+                .background(Color.white.opacity(0.12))
 
-            // Chevron Brand Switcher
-            Button(action: { showingBrandMenu.toggle() }) {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 28, height: 28)
-            }
-            .buttonStyle(.plain)
-            .popover(isPresented: $showingBrandMenu) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Select Brand").font(.headline)
-                    Divider()
-                    ForEach(store.brands) { b in
-                        Button(action: {
-                            store.selectedBrandId = b.id
-                            showingBrandMenu = false
-                        }) {
-                            HStack {
-                                Circle().fill(b.accentColor).frame(width: 12, height: 12)
-                                Text(b.name).foregroundColor(.white)
-                                Spacer()
-                                if store.selectedBrandId == b.id {
-                                    Image(systemName: "checkmark").foregroundColor(.accentColor)
+            // Body: 2 Columns (Colors on Left, Logos on Right)
+            if let brand = store.selectedBrand {
+                HStack(alignment: .top, spacing: 14) {
+                    // LEFT: Colors
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("COLORS")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white.opacity(0.45))
+                                .tracking(0.6)
+                            Spacer()
+                            Button(action: {
+                                OverlayPanelController.shared.openAddColorWindow()
+                            }) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(brand.accentColor)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        ScrollView(.vertical, showsIndicators: false) {
+                            VStack(spacing: 6) {
+                                ForEach(brand.colors) { color in
+                                    let isCopied = copiedColorId == color.id
+                                    Button(action: {
+                                        store.copyColor(color)
+                                        withAnimation { copiedColorId = color.id }
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                            if copiedColorId == color.id { copiedColorId = nil }
+                                        }
+                                    }) {
+                                        HStack(spacing: 8) {
+                                            Capsule()
+                                                .fill(color.swiftUIColor)
+                                                .frame(width: 32, height: 18)
+                                                .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.5))
+
+                                            Text(color.name)
+                                                .font(.system(size: 11, weight: .medium))
+                                                .foregroundColor(.white)
+                                                .lineLimit(1)
+
+                                            Spacer()
+
+                                            if isCopied {
+                                                Text("COPIED")
+                                                    .font(.system(size: 8, weight: .heavy))
+                                                    .foregroundColor(.green)
+                                            } else {
+                                                Text(color.formattedHex)
+                                                    .font(.system(size: 10, design: .monospaced))
+                                                    .foregroundColor(.white.opacity(0.55))
+                                            }
+                                        }
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 4)
+                                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.04)))
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                             }
-                            .padding(.vertical, 3)
                         }
-                        .buttonStyle(.plain)
                     }
-                    Divider()
-                    Button("Switch to Left Dock") {
-                        showingBrandMenu = false
-                        onSwitchMode()
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(12)
-                .frame(width: 180)
-            }
+                    .frame(maxWidth: .infinity)
 
-            // Close
-            Button(action: onToggleExpand) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white.opacity(0.5))
-                    .padding(4)
+                    Divider()
+                        .background(Color.white.opacity(0.12))
+
+                    // RIGHT: Logos
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("LOGOS")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white.opacity(0.45))
+                                .tracking(0.6)
+                            Spacer()
+                            Button(action: {
+                                pickAndAddLogo(for: brand)
+                            }) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(brand.accentColor)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        ScrollView(.vertical, showsIndicators: false) {
+                            LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], spacing: 6) {
+                                ForEach(Array(brand.logos.enumerated()), id: \.element.id) { idx, logo in
+                                    let isDark = idx >= 2
+                                    Button(action: {
+                                        store.copyLogoImage(logo)
+                                        withAnimation { copiedLogoId = logo.id }
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                            if copiedLogoId == logo.id { copiedLogoId = nil }
+                                        }
+                                    }) {
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .fill(isDark ? Color.gray.opacity(0.25) : Color.white)
+                                                .frame(height: 48)
+
+                                            if let img = store.imageForLogo(logo) {
+                                                Image(nsImage: img)
+                                                    .resizable()
+                                                    .aspectRatio(contentMode: .fit)
+                                                    .padding(6)
+                                            } else {
+                                                Text("LOGO")
+                                                    .font(.system(size: 9, weight: .bold))
+                                                    .foregroundColor(isDark ? .white : .black)
+                                            }
+
+                                            if copiedLogoId == logo.id {
+                                                Color.black.opacity(0.7)
+                                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                                Image(systemName: "checkmark")
+                                                    .font(.system(size: 14, weight: .bold))
+                                                    .foregroundColor(.green)
+                                            }
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                    .onDrag {
+                                        let p = NSItemProvider()
+                                        if let f = store.fileURLForLogo(logo) {
+                                            p.registerObject(f as NSURL, visibility: .all)
+                                        }
+                                        if let img = store.imageForLogo(logo) {
+                                            p.registerObject(img, visibility: .all)
+                                        }
+                                        return p
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
             }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.vertical, 12)
+        .frame(width: 440, height: 220)
         .background(Color(red: 0.05, green: 0.05, blue: 0.06))
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
-        .shadow(color: Color.black.opacity(0.6), radius: 16, x: 0, y: 6)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1.2)
+        )
+        .shadow(color: Color.black.opacity(0.65), radius: 20, x: 0, y: 8)
+    }
+
+    private func pickAndAddLogo(for brand: Brand) {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.image, .png, .jpeg, .svg, .pdf]
+
+        if panel.runModal() == .OK {
+            for url in panel.urls {
+                store.addLogoFile(to: brand, fileURL: url)
+            }
+        }
     }
 }

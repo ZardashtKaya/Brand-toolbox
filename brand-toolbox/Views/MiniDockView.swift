@@ -10,8 +10,6 @@ public struct MiniDockView: View {
     public let onOpenSettings: () -> Void
 
     @State private var showingBrandMenu: Bool = false
-    @State private var showingAddBrandSheet: Bool = false
-    @State private var showingAddColorSheet: Bool = false
     @State private var copiedColorId: UUID? = nil
     @State private var copiedLogoId: UUID? = nil
     @State private var isDropTargeted: Bool = false
@@ -29,34 +27,44 @@ public struct MiniDockView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 10) {
-            // MARK: - Top Brand Colors (Horizontal Pills)
-            colorsSection
+        VStack(spacing: 8) {
+            // MARK: - Scrollable Content (Fit to size, scrollable when too much)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 8) {
+                    // Top Colors (Horizontal Capsules)
+                    colorsSection
 
-            // MARK: - Middle Brand Logos (Square Tiles)
-            logosSection
+                    // Divider between colors and logos if both exist
+                    if let brand = store.selectedBrand, !brand.colors.isEmpty && !brand.logos.isEmpty {
+                        Capsule()
+                            .fill(Color.white.opacity(0.12))
+                            .frame(width: 32, height: 2)
+                            .padding(.vertical, 2)
+                    }
 
-            Spacer(minLength: 4)
+                    // Middle Logos (Square Tiles)
+                    logosSection
+                }
+                .padding(.top, 4)
+            }
+
+            Spacer(minLength: 2)
 
             // MARK: - Bottom Brand Switcher Chevron
             chevronButton
         }
-        .padding(.vertical, 14)
+        .padding(.vertical, 12)
         .padding(.horizontal, 9)
-        .frame(width: 76, height: 460)
-        .background(
-            ZStack {
-                // OLED deep black capsule
-                Color(red: 0.05, green: 0.05, blue: 0.06)
-            }
-        )
+        .frame(width: 76)
+        .frame(maxHeight: .infinity)
+        .background(Color(red: 0.05, green: 0.05, blue: 0.06))
         .clipShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 34, style: .continuous)
                 .stroke(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(0.22),
+                            Color.white.opacity(0.24),
                             Color.white.opacity(0.08),
                             Color.white.opacity(0.04)
                         ],
@@ -66,29 +74,22 @@ public struct MiniDockView: View {
                     lineWidth: 1.2
                 )
         )
-        .shadow(color: Color.black.opacity(0.65), radius: 22, x: 6, y: 0)
-        .sheet(isPresented: $showingAddBrandSheet) {
-            AddBrandSheet(store: store)
-        }
-        .sheet(isPresented: $showingAddColorSheet) {
-            if let brand = store.selectedBrand {
-                AddColorSheet(store: store, brand: brand)
-            }
+        .shadow(color: Color.black.opacity(0.7), radius: 20, x: 6, y: 0)
+        .onChange(of: showingBrandMenu) { isOpen in
+            OverlayPanelController.shared.isInteracting = isOpen
         }
     }
 
     // MARK: - Colors Section (Pills)
 
     private var colorsSection: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 7) {
             if let brand = store.selectedBrand {
-                let displayColors = Array(brand.colors.prefix(3))
-                ForEach(displayColors) { color in
+                ForEach(brand.colors) { color in
                     colorPill(color: color)
                 }
 
-                // If less than 3 colors, fill with secondary or plus
-                if displayColors.isEmpty {
+                if brand.colors.isEmpty {
                     colorPillPlaceholder
                 }
             } else {
@@ -111,14 +112,14 @@ public struct MiniDockView: View {
                         Capsule()
                             .stroke(Color.white.opacity(0.2), lineWidth: 0.8)
                     )
-                    .shadow(color: color.swiftUIColor.opacity(0.4), radius: 4, x: 0, y: 2)
+                    .shadow(color: color.swiftUIColor.opacity(0.35), radius: 3, x: 0, y: 2)
 
                 if isCopied {
                     HStack(spacing: 2) {
                         Image(systemName: "checkmark")
-                            .font(.system(size: 10, weight: .black))
+                            .font(.system(size: 9, weight: .black))
                         Text("HEX")
-                            .font(.system(size: 9, weight: .heavy))
+                            .font(.system(size: 8, weight: .heavy))
                     }
                     .foregroundColor(color.contrastTextColor)
                     .transition(.scale.combined(with: .opacity))
@@ -140,7 +141,7 @@ public struct MiniDockView: View {
             }
             Divider()
             Button("Add Color...") {
-                showingAddColorSheet = true
+                OverlayPanelController.shared.openAddColorWindow()
             }
             if let brand = store.selectedBrand {
                 Button("Delete Color", role: .destructive) {
@@ -151,7 +152,9 @@ public struct MiniDockView: View {
     }
 
     private var colorPillPlaceholder: some View {
-        Button(action: { showingAddColorSheet = true }) {
+        Button(action: {
+            OverlayPanelController.shared.openAddColorWindow()
+        }) {
             ZStack {
                 Capsule()
                     .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
@@ -184,19 +187,14 @@ public struct MiniDockView: View {
     // MARK: - Logos Section (Square Tiles)
 
     private var logosSection: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 7) {
             if let brand = store.selectedBrand {
-                let displayLogos = Array(brand.logos.prefix(3))
-
-                ForEach(Array(displayLogos.enumerated()), id: \.element.id) { index, logo in
+                ForEach(Array(brand.logos.enumerated()), id: \.element.id) { index, logo in
                     logoTile(logo: logo, index: index)
                 }
 
-                // If less than 3 logos, fill with placeholder add slot
-                if displayLogos.count < 3 {
-                    ForEach(displayLogos.count..<3, id: \.self) { _ in
-                        logoTilePlaceholder(brand: brand)
-                    }
+                if brand.logos.isEmpty {
+                    logoTilePlaceholder(brand: brand)
                 }
             } else {
                 logoTilePlaceholder(brand: nil)
@@ -212,23 +210,18 @@ public struct MiniDockView: View {
 
     private func logoTile(logo: BrandLogo, index: Int) -> some View {
         let isCopied = copiedLogoId == logo.id
-        // Match screenshot: top two tiles are bright white, third tile is dark gradient!
+        // Match screenshot: top tiles white, later tile dark gradient
         let isDarkTile = index >= 2
 
         return Button(action: {
             triggerCopyLogo(logo)
         }) {
             ZStack {
-                // Background Tile
                 if isDarkTile {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(
                             LinearGradient(
-                                colors: [
-                                    Color(white: 0.55),
-                                    Color(white: 0.25),
-                                    Color(white: 0.12)
-                                ],
+                                colors: [Color(white: 0.55), Color(white: 0.25), Color(white: 0.12)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -240,7 +233,6 @@ public struct MiniDockView: View {
                         .frame(width: 58, height: 58)
                 }
 
-                // Logo content / preview
                 if let nsImage = store.imageForLogo(logo) {
                     Image(nsImage: nsImage)
                         .resizable()
@@ -253,7 +245,6 @@ public struct MiniDockView: View {
                         .foregroundColor(isDarkTile ? .white : .black)
                 }
 
-                // Copied Overlay
                 if isCopied {
                     ZStack {
                         Color.black.opacity(0.8)
@@ -279,8 +270,7 @@ public struct MiniDockView: View {
             .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
-        .help("\(logo.name) (Click to copy, Drag to use in Figma/Finder)")
-        // DRAG AND DROP OUT
+        .help("\(logo.name) (Click to copy, Drag to use)")
         .onDrag {
             createDragProvider(for: logo)
         }
@@ -375,7 +365,7 @@ public struct MiniDockView: View {
         }) {
             ZStack {
                 Color.clear
-                    .frame(width: 58, height: 32)
+                    .frame(width: 58, height: 28)
 
                 Image(systemName: "chevron.down")
                     .font(.system(size: 18, weight: .bold))
@@ -385,7 +375,7 @@ public struct MiniDockView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("Switch Brand / Options (\(store.selectedBrand?.name ?? ""))")
+        .help("Click to switch brand (\(store.selectedBrand?.name ?? ""))")
         .popover(isPresented: $showingBrandMenu, arrowEdge: .trailing) {
             brandPickerPopover
         }
@@ -401,7 +391,7 @@ public struct MiniDockView: View {
                 Spacer()
                 Button(action: {
                     showingBrandMenu = false
-                    showingAddBrandSheet = true
+                    OverlayPanelController.shared.openAddBrandWindow()
                 }) {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 14))
@@ -414,7 +404,7 @@ public struct MiniDockView: View {
             Divider()
 
             // Brands List
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 ForEach(store.brands) { brand in
                     let isSel = store.selectedBrandId == brand.id
                     Button(action: {
@@ -456,7 +446,7 @@ public struct MiniDockView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Button(action: {
                     showingBrandMenu = false
-                    showingAddColorSheet = true
+                    OverlayPanelController.shared.openAddColorWindow()
                 }) {
                     Label("Add Color...", systemImage: "paintbrush.fill")
                         .font(.system(size: 11))

@@ -76,6 +76,37 @@ public final class BrandStore: ObservableObject {
         }
     }
 
+    public func cycleToNextBrand() {
+        guard !brands.isEmpty else { return }
+        if let curId = selectedBrandId, let idx = brands.firstIndex(where: { $0.id == curId }) {
+            let nextIdx = (idx + 1) % brands.count
+            selectedBrandId = brands[nextIdx].id
+        } else {
+            selectedBrandId = brands.first?.id
+        }
+        savePreferences()
+        if soundAndHaptics {
+            NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+            NSSound(named: "Pop")?.play()
+        }
+        showToast(message: "Brand: \(selectedBrand?.name ?? "")")
+    }
+
+    public func idealDockHeight(maxAllowed: CGFloat = 560) -> CGFloat {
+        guard let brand = selectedBrand else { return 260 }
+        let colorsCount = max(1, brand.colors.count)
+        let logosCount = max(1, brand.logos.count)
+
+        let colorsHeight = CGFloat(colorsCount) * (26 + 8)
+        let logosHeight = CGFloat(logosCount) * (58 + 8)
+        let chromeHeight: CGFloat = 28 + 36 // padding top/bottom + chevron
+        let total = chromeHeight + colorsHeight + logosHeight
+
+        let minHeight: CGFloat = 220
+        let maxHeight = min(maxAllowed, 540)
+        return min(maxHeight, max(minHeight, total))
+    }
+
     public init() {
         loadPreferences()
         loadBrands()

@@ -21,6 +21,7 @@ public final class OverlayPanelController: ObservableObject {
     public static let shared = OverlayPanelController()
 
     @Published public var isExpanded: Bool = true
+    @Published public var isInteracting: Bool = false
 
     private var panel: OverlayPanel?
     private var store: BrandStore = .shared
@@ -32,11 +33,19 @@ public final class OverlayPanelController: ObservableObject {
 
     private var autoCollapseWorkItem: DispatchWorkItem?
     private var settingsWindowController: NSWindowController?
+    private var addBrandWindowController: NSWindowController?
+    private var addColorWindowController: NSWindowController?
     private var cancellables = Set<AnyCancellable>()
 
     public init() {
-        // Observe mode changes to update position
+        // Observe mode changes or brand changes to update frame & height
         store.$overlayMode
+            .sink { [weak self] _ in
+                self?.repositionPanel(animated: true)
+            }
+            .store(in: &cancellables)
+
+        store.$selectedBrandId
             .sink { [weak self] _ in
                 self?.repositionPanel(animated: true)
             }
@@ -105,9 +114,9 @@ public final class OverlayPanelController: ObservableObject {
         newPanel.orderFrontRegardless()
         startMouseMonitoring()
 
-        // After launch, schedule auto-collapse after 3 seconds if not pinned
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
-            guard let self, !self.store.isPinned else { return }
+        // Launch peek grace period: let user see the dock, then collapse after 3.5s if not hovered or pinned
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
+            guard let self, !self.store.isPinned, !self.isInteracting else { return }
             let mouseLoc = NSEvent.mouseLocation
             if let panel = self.panel, !NSMouseInRect(mouseLoc, panel.frame.insetBy(dx: -40, dy: -40), false) {
                 self.setExpanded(false)
@@ -136,6 +145,7 @@ public final class OverlayPanelController: ObservableObject {
     }
 
     public func openSettings() {
+        isInteracting = true
         if let existing = settingsWindowController {
             existing.showWindow(nil)
             existing.window?.makeKeyAndOrderFront(nil)
@@ -146,13 +156,63 @@ public final class OverlayPanelController: ObservableObject {
         let settingsView = SettingsView(store: store)
         let hostingController = NSHostingController(rootView: settingsView)
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "Brand Toolbox Settings"
+        window.title = "Brand Toolbox Preferences"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
+        window.level = .floating
         window.center()
 
         let wc = NSWindowController(window: window)
         self.settingsWindowController = wc
+        wc.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    public func openAddBrandWindow() {
+        isInteracting = true
+        if let existing = addBrandWindowController {
+            existing.showWindow(nil)
+            existing.window?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let sheetView = AddBrandSheet(store: store)
+        let hostingController = NSHostingController(rootView: sheetView)
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Create New Brand"
+        window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
+        window.level = .floating
+        window.center()
+
+        let wc = NSWindowController(window: window)
+        self.addBrandWindowController = wc
+        wc.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    public func openAddColorWindow() {
+        guard let brand = store.selectedBrand else { return }
+        isInteracting = true
+        if let existing = addColorWindowController {
+            existing.showWindow(nil)
+            existing.window?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let sheetView = AddColorSheet(store: store, brand: brand)
+        let hostingController = NSHostingController(rootView: sheetView)
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Add Color to \(brand.name)"
+        window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
+        window.level = .floating
+        window.center()
+
+        let wc = NSWindowController(window: window)
+        self.addColorWindowController = wc
         wc.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -186,7 +246,7 @@ public final class OverlayPanelController: ObservableObject {
 
     private func calculatePanelFrame(isExpanded: Bool, screen: NSScreen? = nil) -> NSRect {
         guard let screen = screen ?? targetScreen() else {
-            return NSRect(x: 14, y: 200, width: 76, height: 460)
+            return NSRect(x: 14, y: 200, width: 76, height: 380)
         }
 
         let sFrame = screen.frame
@@ -194,25 +254,22 @@ public final class OverlayPanelController: ObservableObject {
         switch store.overlayMode {
         case .leftDock:
             let width: CGFloat = 76
-            let height: CGFloat = 460
-            // Vertically center on screen
+            let height = store.idealDockHeight(maxAllowed: sFrame.height - 120)
             let y: CGFloat = sFrame.minY + (sFrame.height - height) / 2
-            // When expanded: floats 14px inside left screen edge
-            // When collapsed: peeks 6px on the left edge
             let x: CGFloat = isExpanded ? (sFrame.minX + 14) : (sFrame.minX - width + 6)
             return NSRect(x: x, y: y, width: width, height: height)
 
         case .rightDock:
             let width: CGFloat = 76
-            let height: CGFloat = 460
+            let height = store.idealDockHeight(maxAllowed: sFrame.height - 120)
             let y: CGFloat = sFrame.minY + (sFrame.height - height) / 2
             let x: CGFloat = isExpanded ? (sFrame.maxX - width - 14) : (sFrame.maxX - 6)
             return NSRect(x: x, y: y, width: width, height: height)
 
         case .dynamicIsland:
             if isExpanded {
-                let width: CGFloat = 380
-                let height: CGFloat = 54
+                let width: CGFloat = 440
+                let height: CGFloat = 220
                 let x = sFrame.midX - (width / 2)
                 let topOffset: CGFloat = screen.hasNotch ? screen.notchHeight + 2 : 10
                 let y = sFrame.maxY - height - topOffset
@@ -287,28 +344,33 @@ public final class OverlayPanelController: ObservableObject {
         guard let panel, let screen = targetScreen() else { return }
         let panelFrame = panel.frame
 
+        // Never auto-collapse if user is actively interacting with a menu/sheet, or pinned
+        if isInteracting || store.isPinned {
+            autoCollapseWorkItem?.cancel()
+            return
+        }
+
         switch store.overlayMode {
         case .leftDock:
             let sensitivity = CGFloat(max(10, store.edgeSensitivityPx))
             let isAtLeftEdge = location.x <= (screen.frame.minX + sensitivity)
 
             if isAtLeftEdge {
-                // User moved cursor to the far left edge of screen: reveal dock!
                 autoCollapseWorkItem?.cancel()
                 if !isExpanded {
                     setExpanded(true)
                 }
             } else if isExpanded {
-                // Generous area around the dock so moving between pills/tiles doesn't close it
+                // Wide hit area including any popover tray to the right (up to x: 300)
                 let dockHitArea = NSRect(
                     x: screen.frame.minX - 10,
                     y: panelFrame.minY - 30,
-                    width: 76 + 60,
+                    width: 76 + 240,
                     height: panelFrame.height + 60
                 )
                 if NSMouseInRect(location, dockHitArea, false) {
                     autoCollapseWorkItem?.cancel()
-                } else if !store.isPinned {
+                } else {
                     scheduleAutoCollapse()
                 }
             }
@@ -324,14 +386,14 @@ public final class OverlayPanelController: ObservableObject {
                 }
             } else if isExpanded {
                 let dockHitArea = NSRect(
-                    x: panelFrame.minX - 50,
+                    x: panelFrame.minX - 240,
                     y: panelFrame.minY - 30,
-                    width: 76 + 60,
+                    width: 76 + 250,
                     height: panelFrame.height + 60
                 )
                 if NSMouseInRect(location, dockHitArea, false) {
                     autoCollapseWorkItem?.cancel()
-                } else if !store.isPinned {
+                } else {
                     scheduleAutoCollapse()
                 }
             }
@@ -348,7 +410,7 @@ public final class OverlayPanelController: ObservableObject {
                 let hitArea = panelFrame.insetBy(dx: -40, dy: -40)
                 if NSMouseInRect(location, hitArea, false) {
                     autoCollapseWorkItem?.cancel()
-                } else if !store.isPinned {
+                } else {
                     scheduleAutoCollapse()
                 }
             }
@@ -356,19 +418,23 @@ public final class OverlayPanelController: ObservableObject {
     }
 
     private func handleMouseDown(_ location: NSPoint) {
-        guard let panel, isExpanded, !store.isPinned else { return }
-        let hitArea = panel.frame
+        // If user is interacting with an open popover or modal, do NOT dismiss!
+        if isInteracting || store.isPinned {
+            return
+        }
+
+        guard let panel, isExpanded else { return }
+        let hitArea = panel.frame.insetBy(dx: -20, dy: -20)
         if !NSMouseInRect(location, hitArea, false) {
-            // Clicked outside while unpinned: collapse
             setExpanded(false)
         }
     }
 
     private func scheduleAutoCollapse() {
-        guard autoCollapseWorkItem == nil else { return }
+        guard autoCollapseWorkItem == nil, !isInteracting, !store.isPinned else { return }
 
         let item = DispatchWorkItem { [weak self] in
-            guard let self, !self.store.isPinned else { return }
+            guard let self, !self.store.isPinned, !self.isInteracting else { return }
             self.setExpanded(false)
             self.autoCollapseWorkItem = nil
         }
