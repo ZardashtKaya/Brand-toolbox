@@ -139,11 +139,51 @@ public struct SettingsView: View {
 
     // MARK: - About Tab
 
+    private var aboutIconImage: NSImage? {
+        // 1. Try compiled app icon from Bundle (BT.icns from BT.icon)
+        if let image = Bundle.main.image(forResource: "BT") {
+            return image
+        }
+        if let path = Bundle.main.path(forResource: "BT", ofType: "icns"),
+           let image = NSImage(contentsOfFile: path) {
+            return image
+        }
+        if let icon = NSApp?.applicationIconImage, icon.isValid {
+            return icon
+        }
+
+        // 2. Fallbacks for previews & local paths
+        let candidates = [
+            Bundle.main.resourcePath.map { "\($0)/BT.icon/Assets/Artboard 1_2 2.svg" },
+            Bundle.main.resourcePath.map { "\($0)/BT.icon/Assets/Artboard 1_2.svg" },
+            Bundle.main.resourcePath.map { "\($0)/BT.icns" },
+            "Resources/BT.icon/Assets/Artboard 1_2 2.svg",
+            "Resources/BT.icon/Assets/Artboard 1_2.svg",
+            "BT.icon/Assets/Artboard 1_2.svg",
+            "Build/Products/Debug/brand-toolbox.app/Contents/Resources/BT.icns"
+        ].compactMap { $0 }
+
+        for path in candidates {
+            if let image = NSImage(contentsOfFile: path), image.isValid {
+                return image
+            }
+        }
+        return nil
+    }
+
     private var aboutTab: some View {
         VStack(spacing: 16) {
-            Image(systemName: "paintpalette.fill")
-                .font(.system(size: 48))
-                .foregroundColor(.accentColor)
+            if let icon = aboutIconImage {
+                Image(nsImage: icon)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 76, height: 76)
+                    .shadow(color: Color.black.opacity(0.18), radius: 6, x: 0, y: 3)
+            } else {
+                Image(systemName: "paintpalette.fill")
+                    .font(.system(size: 48))
+                    .foregroundColor(.accentColor)
+            }
 
             Text("Brand Toolbox")
                 .font(.title2.bold())
