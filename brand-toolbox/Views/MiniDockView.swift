@@ -449,7 +449,8 @@ public struct MiniDockView: View {
                     Image(nsImage: img)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .padding(6)
+                        .frame(maxWidth: .infinity, maxHeight: 34)
+                        .padding(.horizontal, 6)
                 } else {
                     Text(logo.name.prefix(4).uppercased())
                         .font(.system(size: 9, weight: .bold))

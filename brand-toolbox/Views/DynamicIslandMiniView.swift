@@ -301,13 +301,13 @@ public struct DynamicIslandMiniView: View {
                                         ZStack {
                                             RoundedRectangle(cornerRadius: 10)
                                                 .fill(isDark ? Color.gray.opacity(0.25) : Color.white)
-                                                .frame(height: 48)
 
                                             if let img = store.imageForLogo(logo) {
                                                 Image(nsImage: img)
                                                     .resizable()
                                                     .aspectRatio(contentMode: .fit)
-                                                    .padding(8)
+                                                    .frame(maxWidth: .infinity, maxHeight: 32)
+                                                    .padding(.horizontal, 6)
                                             } else {
                                                 Text(logo.name.prefix(4).uppercased())
                                                     .font(.system(size: 9, weight: .bold))
@@ -340,6 +340,7 @@ public struct DynamicIslandMiniView: View {
                                                     .foregroundColor(.green)
                                             }
                                         }
+                                        .frame(height: 48)
                                     }
                                     .buttonStyle(.plain)
                                     .help("\(logo.name) (Click to copy, Drag to use, Right-click for options)")
