@@ -22,7 +22,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
             button.image = menuBarIcon()
-            button.toolTip = "Brand Toolbox"
+            button.toolTip = "Branding Toolbox"
         }
 
         let menu = NSMenu()
@@ -56,7 +56,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        let fallback = NSImage(systemSymbolName: "paintpalette.fill", accessibilityDescription: "Brand Toolbox")
+        let fallback = NSImage(systemSymbolName: "paintpalette.fill", accessibilityDescription: "Branding Toolbox")
         fallback?.isTemplate = true
         return fallback
     }
@@ -65,7 +65,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.removeAllItems()
 
         // Title item
-        let titleItem = NSMenuItem(title: "Brand Toolbox", action: nil, keyEquivalent: "")
+        let titleItem = NSMenuItem(title: "Branding Toolbox", action: nil, keyEquivalent: "")
         titleItem.isEnabled = false
         menu.addItem(titleItem)
 
@@ -130,7 +130,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
 
         // Quit
-        let quitItem = NSMenuItem(title: "Quit Brand Toolbox", action: #selector(quitApp), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Quit Branding Toolbox", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
     }

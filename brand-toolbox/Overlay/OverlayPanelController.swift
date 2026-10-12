@@ -183,7 +183,7 @@ public final class OverlayPanelController: ObservableObject {
         let settingsView = SettingsView(store: store)
         let hostingController = NSHostingController(rootView: settingsView)
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "Brand Toolbox Preferences"
+        window.title = "Branding Toolbox Preferences"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
         window.level = .floating

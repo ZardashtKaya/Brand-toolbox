@@ -23,9 +23,14 @@ public final class BrandStore: ObservableObject {
     private let fileManager = FileManager.default
     private var appSupportURL: URL {
         let paths = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-        let dir = paths[0].appendingPathComponent("BrandToolbox", isDirectory: true)
+        let dir = paths[0].appendingPathComponent("BrandingToolbox", isDirectory: true)
+        let legacyDir = paths[0].appendingPathComponent("BrandToolbox", isDirectory: true)
         if !fileManager.fileExists(atPath: dir.path) {
-            try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+            if fileManager.fileExists(atPath: legacyDir.path) {
+                try? fileManager.moveItem(at: legacyDir, to: dir)
+            } else {
+                try? fileManager.createDirectory(at: dir, withIntermediateDirectories: true)
+            }
         }
         return dir
     }

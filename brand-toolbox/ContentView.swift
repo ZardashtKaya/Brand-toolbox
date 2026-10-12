@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct BrandToolboxApp: App {
+struct BrandingToolboxApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
@@ -13,6 +13,6 @@ struct BrandToolboxApp: App {
 
 // MARK: - Previews
 
-#Preview("Brand Toolbox Settings") {
+#Preview("Branding Toolbox Settings") {
     SettingsView(store: .shared)
 }

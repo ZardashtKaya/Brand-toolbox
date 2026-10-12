@@ -1,8 +1,6 @@
-# Brand Toolbox 🎨
+# Branding Toolbox 🎨
 
-A native macOS companion dock and Dynamic Island overlay for instant brand color hex copying and logo drag-and-drop.
-
-Inspired by [Octane0411/open-vibe-island](https://github.com/Octane0411/open-vibe-island).
+A native macOS companion dock and Dynamic Island overlay for instant brand color hex copying and logo drag-and-drop. Developed by [zardashtkaya](https://github.com/zardashtkaya).
 
 ---
 

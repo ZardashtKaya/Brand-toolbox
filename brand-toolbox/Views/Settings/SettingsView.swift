@@ -185,10 +185,10 @@ public struct SettingsView: View {
                     .foregroundColor(.accentColor)
             }
 
-            Text("Brand Toolbox")
+            Text("Branding Toolbox")
                 .font(.title2.bold())
 
-            Text("Version 1.0 • Designed for macOS")
+            Text("Version 1.0 • Developed by zardashtkaya")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
