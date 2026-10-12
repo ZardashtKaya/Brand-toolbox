@@ -21,9 +21,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
-            let image = NSImage(systemSymbolName: "paintpalette.fill", accessibilityDescription: "Brand Toolbox")
-            image?.isTemplate = true
-            button.image = image
+            button.image = menuBarIcon()
             button.toolTip = "Brand Toolbox"
         }
 
@@ -31,6 +29,36 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         updateMenu(menu)
         item.menu = menu
         self.statusItem = item
+    }
+
+    private func menuBarIcon() -> NSImage? {
+        // 1. Try bundle resources (copied via Resources/favicon.svg)
+        if let url = Bundle.main.url(forResource: "favicon", withExtension: "svg"),
+           let image = NSImage(contentsOf: url) {
+            image.size = NSSize(width: 18, height: 18)
+            image.isTemplate = true
+            return image
+        }
+
+        // 2. Direct paths for development / fallback
+        let candidates = [
+            Bundle.main.resourcePath.map { "\($0)/favicon.svg" },
+            Bundle.main.resourcePath.map { "\($0)/SVG/favicon.svg" },
+            "Resources/favicon.svg",
+            "SVG/favicon.svg"
+        ].compactMap { $0 }
+
+        for path in candidates {
+            if let image = NSImage(contentsOfFile: path) {
+                image.size = NSSize(width: 18, height: 18)
+                image.isTemplate = true
+                return image
+            }
+        }
+
+        let fallback = NSImage(systemSymbolName: "paintpalette.fill", accessibilityDescription: "Brand Toolbox")
+        fallback?.isTemplate = true
+        return fallback
     }
 
     private func updateMenu(_ menu: NSMenu) {

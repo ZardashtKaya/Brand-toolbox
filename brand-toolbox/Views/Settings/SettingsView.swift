@@ -154,7 +154,7 @@ public struct SettingsView: View {
 
         // 2. Fallbacks for previews & local paths
         let candidates = [
-            Bundle.main.resourcePath.map { "\($0)/BT.icon/Assets/Artboard 1_2 2.svg" },
+            Bundle.main.resourcePath.map { "\($0)/BT.icon/Assets/Artboard 1_2" },
             Bundle.main.resourcePath.map { "\($0)/BT.icon/Assets/Artboard 1_2.svg" },
             Bundle.main.resourcePath.map { "\($0)/BT.icns" },
             "Resources/BT.icon/Assets/Artboard 1_2 2.svg",

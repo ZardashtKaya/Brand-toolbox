@@ -300,7 +300,7 @@ public struct DynamicIslandMiniView: View {
                                     }) {
                                         ZStack {
                                             RoundedRectangle(cornerRadius: 10)
-                                                .fill(isDark ? Color.gray.opacity(0.25) : Color.white)
+                                                .fill(isDark ? Color.gray.opacity(0.25) : Color.black)
 
                                             if let img = store.imageForLogo(logo) {
                                                 Image(nsImage: img)

@@ -442,7 +442,7 @@ public struct MiniDockView: View {
         }) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isDark ? Color.gray.opacity(0.25) : Color.white)
+                    .fill(isDark ? Color.gray.opacity(0.25) : Color.black)
                     .frame(height: 50)
 
                 if let img = store.imageForLogo(logo) {
