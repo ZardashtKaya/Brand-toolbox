@@ -501,6 +501,24 @@ public final class BrandStore: ObservableObject {
         showToast(message: "Added color '\(name)' (\(color.formattedHex))")
     }
 
+    public func addColors(to brand: Brand, colors: [(name: String, hex: String, role: ColorRole)]) {
+        guard let idx = brands.firstIndex(where: { $0.id == brand.id }), !colors.isEmpty else { return }
+        for item in colors {
+            let color = BrandColor(name: item.name, hex: item.hex, role: item.role)
+            brands[idx].colors.append(color)
+        }
+        saveBrands()
+        let count = colors.count
+        showToast(message: "Added \(count) color\(count == 1 ? "" : "s") to '\(brand.name)'")
+        if soundAndHaptics {
+            NSHapticFeedbackManager.defaultPerformer.perform(
+                .alignment,
+                performanceTime: .now
+            )
+            NSSound(named: "Glass")?.play()
+        }
+    }
+
     public func updateColor(in brand: Brand, color: BrandColor) {
         guard let bIdx = brands.firstIndex(where: { $0.id == brand.id }),
               let cIdx = brands[bIdx].colors.firstIndex(where: { $0.id == color.id }) else { return }
