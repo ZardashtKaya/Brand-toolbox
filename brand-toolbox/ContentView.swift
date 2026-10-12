@@ -1,25 +1,12 @@
 import SwiftUI
-import Playgrounds
 
-@main struct MyApp: App {
+@main
+struct BrandToolboxApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        Settings {
+            SettingsView(store: BrandStore.shared)
         }
     }
-}
-
-struct ContentView: View {
-    var body: some View {
-        Text("Hello, world!")
-            .padding()
-    }
-}
-
-#Preview {
-    ContentView()
-}
-
-#Playground {
-    _ = 1 + 2
 }
