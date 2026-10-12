@@ -20,7 +20,7 @@ public final class OverlayPanel: NSPanel {
 public final class OverlayPanelController: ObservableObject {
     public static let shared = OverlayPanelController()
 
-    @Published public var isExpanded: Bool = false
+    @Published public var isExpanded: Bool = true
 
     private var panel: OverlayPanel?
     private var store: BrandStore = .shared
@@ -56,7 +56,7 @@ public final class OverlayPanelController: ObservableObject {
     public func setup() {
         if panel != nil { return }
 
-        let initialFrame = calculatePanelFrame(isExpanded: false)
+        let initialFrame = calculatePanelFrame(isExpanded: true)
         let newPanel = OverlayPanel(
             contentRect: initialFrame,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -104,6 +104,15 @@ public final class OverlayPanelController: ObservableObject {
 
         newPanel.orderFrontRegardless()
         startMouseMonitoring()
+
+        // After launch, schedule auto-collapse after 3 seconds if not pinned
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            guard let self, !self.store.isPinned else { return }
+            let mouseLoc = NSEvent.mouseLocation
+            if let panel = self.panel, !NSMouseInRect(mouseLoc, panel.frame.insetBy(dx: -40, dy: -40), false) {
+                self.setExpanded(false)
+            }
+        }
     }
 
     public func setExpanded(_ expanded: Bool) {
@@ -166,7 +175,6 @@ public final class OverlayPanelController: ObservableObject {
     }
 
     private func targetScreen() -> NSScreen? {
-        // Return screen containing cursor, or main screen
         let mouseLocation = NSEvent.mouseLocation
         for screen in NSScreen.screens {
             if NSMouseInRect(mouseLocation, screen.frame, false) {
@@ -178,38 +186,42 @@ public final class OverlayPanelController: ObservableObject {
 
     private func calculatePanelFrame(isExpanded: Bool, screen: NSScreen? = nil) -> NSRect {
         guard let screen = screen ?? targetScreen() else {
-            return NSRect(x: 0, y: 0, width: 320, height: 560)
+            return NSRect(x: 14, y: 200, width: 76, height: 460)
         }
 
         let sFrame = screen.frame
 
         switch store.overlayMode {
         case .leftDock:
-            let width: CGFloat = isExpanded ? 320 : 16
-            let height: CGFloat = isExpanded ? 560 : 76
-            let x: CGFloat = isExpanded ? (sFrame.minX + 8) : sFrame.minX
-            let y: CGFloat = sFrame.midY - (height / 2)
+            let width: CGFloat = 76
+            let height: CGFloat = 460
+            // Vertically center on screen
+            let y: CGFloat = sFrame.minY + (sFrame.height - height) / 2
+            // When expanded: floats 14px inside left screen edge
+            // When collapsed: peeks 6px on the left edge
+            let x: CGFloat = isExpanded ? (sFrame.minX + 14) : (sFrame.minX - width + 6)
             return NSRect(x: x, y: y, width: width, height: height)
 
         case .rightDock:
-            let width: CGFloat = isExpanded ? 320 : 16
-            let height: CGFloat = isExpanded ? 560 : 76
-            let x: CGFloat = isExpanded ? (sFrame.maxX - width - 8) : (sFrame.maxX - width)
-            let y: CGFloat = sFrame.midY - (height / 2)
+            let width: CGFloat = 76
+            let height: CGFloat = 460
+            let y: CGFloat = sFrame.minY + (sFrame.height - height) / 2
+            let x: CGFloat = isExpanded ? (sFrame.maxX - width - 14) : (sFrame.maxX - 6)
             return NSRect(x: x, y: y, width: width, height: height)
 
         case .dynamicIsland:
             if isExpanded {
-                let width: CGFloat = 530
-                let height: CGFloat = 380
+                let width: CGFloat = 380
+                let height: CGFloat = 54
                 let x = sFrame.midX - (width / 2)
-                let y = sFrame.maxY - height
+                let topOffset: CGFloat = screen.hasNotch ? screen.notchHeight + 2 : 10
+                let y = sFrame.maxY - height - topOffset
                 return NSRect(x: x, y: y, width: width, height: height)
             } else {
-                let width: CGFloat = 230
-                let height: CGFloat = screen.hasNotch ? max(36, screen.notchHeight) : 36
+                let width: CGFloat = 210
+                let height: CGFloat = 36
                 let x = sFrame.midX - (width / 2)
-                let y = sFrame.maxY - height
+                let y = sFrame.maxY - height - (screen.hasNotch ? 0 : 8)
                 return NSRect(x: x, y: y, width: width, height: height)
             }
         }
@@ -277,17 +289,24 @@ public final class OverlayPanelController: ObservableObject {
 
         switch store.overlayMode {
         case .leftDock:
-            let sensitivity = CGFloat(store.edgeSensitivityPx)
+            let sensitivity = CGFloat(max(10, store.edgeSensitivityPx))
             let isAtLeftEdge = location.x <= (screen.frame.minX + sensitivity)
 
-            if !isExpanded && isAtLeftEdge {
-                // User hovered far left edge: open dock!
+            if isAtLeftEdge {
+                // User moved cursor to the far left edge of screen: reveal dock!
                 autoCollapseWorkItem?.cancel()
-                setExpanded(true)
+                if !isExpanded {
+                    setExpanded(true)
+                }
             } else if isExpanded {
-                // Generous hit test area so the cursor can move around comfortably
-                let hitArea = panelFrame.insetBy(dx: -30, dy: -30)
-                if NSMouseInRect(location, hitArea, false) {
+                // Generous area around the dock so moving between pills/tiles doesn't close it
+                let dockHitArea = NSRect(
+                    x: screen.frame.minX - 10,
+                    y: panelFrame.minY - 30,
+                    width: 76 + 60,
+                    height: panelFrame.height + 60
+                )
+                if NSMouseInRect(location, dockHitArea, false) {
                     autoCollapseWorkItem?.cancel()
                 } else if !store.isPinned {
                     scheduleAutoCollapse()
@@ -295,15 +314,22 @@ public final class OverlayPanelController: ObservableObject {
             }
 
         case .rightDock:
-            let sensitivity = CGFloat(store.edgeSensitivityPx)
+            let sensitivity = CGFloat(max(10, store.edgeSensitivityPx))
             let isAtRightEdge = location.x >= (screen.frame.maxX - sensitivity)
 
-            if !isExpanded && isAtRightEdge {
+            if isAtRightEdge {
                 autoCollapseWorkItem?.cancel()
-                setExpanded(true)
+                if !isExpanded {
+                    setExpanded(true)
+                }
             } else if isExpanded {
-                let hitArea = panelFrame.insetBy(dx: -30, dy: -30)
-                if NSMouseInRect(location, hitArea, false) {
+                let dockHitArea = NSRect(
+                    x: panelFrame.minX - 50,
+                    y: panelFrame.minY - 30,
+                    width: 76 + 60,
+                    height: panelFrame.height + 60
+                )
+                if NSMouseInRect(location, dockHitArea, false) {
                     autoCollapseWorkItem?.cancel()
                 } else if !store.isPinned {
                     scheduleAutoCollapse()
@@ -311,13 +337,15 @@ public final class OverlayPanelController: ObservableObject {
             }
 
         case .dynamicIsland:
-            let isNearNotch = location.y >= (screen.frame.maxY - 45) && abs(location.x - screen.frame.midX) <= 130
+            let isNearNotch = location.y >= (screen.frame.maxY - 45) && abs(location.x - screen.frame.midX) <= 120
 
-            if !isExpanded && isNearNotch {
+            if isNearNotch {
                 autoCollapseWorkItem?.cancel()
-                setExpanded(true)
+                if !isExpanded {
+                    setExpanded(true)
+                }
             } else if isExpanded {
-                let hitArea = panelFrame.insetBy(dx: -30, dy: -30)
+                let hitArea = panelFrame.insetBy(dx: -40, dy: -40)
                 if NSMouseInRect(location, hitArea, false) {
                     autoCollapseWorkItem?.cancel()
                 } else if !store.isPinned {
@@ -331,7 +359,7 @@ public final class OverlayPanelController: ObservableObject {
         guard let panel, isExpanded, !store.isPinned else { return }
         let hitArea = panel.frame
         if !NSMouseInRect(location, hitArea, false) {
-            // Click outside when unpinned: collapse immediately
+            // Clicked outside while unpinned: collapse
             setExpanded(false)
         }
     }
